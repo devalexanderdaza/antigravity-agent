@@ -26,7 +26,21 @@
     "category": "Utility",
     "shortDescription": "Antigravity account and profile manager",
     "longDescription": "Antigravity Agent helps you manage Antigravity accounts and backup user profiles with ease.",
-    "targets": "all"
+    "targets": [
+      "nsis"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/MonchiLin/antigravity-agent/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIxNzY0QUIyQTk0RjVGNjgKUldSV3pXQ1F6TkRMU3M0Zmw3YU9CdG93cHJrbUk4bE1iZURpaG9sbldYSmxNeVRCb2NQMU94TGYKY0lYQ2FJdGFhVVZs",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   },
   "app": {
     "windows": [
@@ -45,7 +59,27 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "windows": [
+            "main"
+          ],
+          "permissions": [
+            "core:default",
+            "shell:default",
+            "dialog:default",
+            "fs:default",
+            "updater:default",
+            "updater:allow-check",
+            "updater:allow-download",
+            "updater:allow-install",
+            "process:default",
+            "process:allow-restart"
+          ]
+        }
+      ]
     }
   }
 }

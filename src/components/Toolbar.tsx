@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import PasswordDialog from './PasswordDialog';
+import UpdateDialog from './UpdateDialog';
 import { TooltipProvider } from './ui/tooltip';
 import ToolbarTitle from './ui/toolbar-title';
 import ToolbarActions from './toolbar-actions';
 import SystemTraySwitch from './ui/system-tray-switch';
 import { usePasswordDialog } from '../hooks/use-password-dialog';
+import { useUpdateChecker } from '../hooks/useUpdateChecker';
 import { SystemTrayService } from '../services/system-tray-service';
 
 interface ToolbarProps {
@@ -83,12 +85,54 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefresh, isRefreshing = false, show
     handlePasswordDialogCancel
   } = usePasswordDialog(showStatus);
 
+  // 使用自动更新检查 Hook
+  const {
+    updateState,
+    updateInfo,
+    downloadProgress,
+    error: updateError,
+    startDownload,
+    installAndRelaunch,
+    dismissUpdate,
+  } = useUpdateChecker(true); // 启用自动检查
+
+  // 更新对话框状态
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+
+  // 处理更新徽章点击
+  const handleUpdateBadgeClick = () => {
+    setIsUpdateDialogOpen(true);
+  };
+
+  // 处理开始下载
+  const handleStartDownload = async () => {
+    try {
+      await startDownload();
+      showStatus('更新包下载完成，点击重启按钮安装', false);
+    } catch (error) {
+      // 只在控制台打印错误，不提示用户
+      console.error('下载失败:', error);
+    }
+  };
+
+  // 处理安装并重启
+  const handleInstallAndRelaunch = async () => {
+    try {
+      showStatus('正在安装更新并重启应用...', false);
+      await installAndRelaunch();
+      // 如果成功，应用会重启，这里的代码不会执行
+    } catch (error) {
+      // 只在控制台打印错误，不提示用户
+      console.error('安装失败:', error);
+    }
+  };
+
   // 计算全局加载状态
   const isAnyLoading = useMemo(() => {
     return loadingState.isProcessLoading ||
-           loadingState.isImporting ||
-           loadingState.isExporting ||
-           isRefreshing;
+      loadingState.isImporting ||
+      loadingState.isExporting ||
+      isRefreshing;
   }, [loadingState, isRefreshing]);
 
   return (
@@ -97,7 +141,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefresh, isRefreshing = false, show
         <div className="toolbar-content max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <ToolbarTitle />
+              <ToolbarTitle
+                updateState={updateState}
+                downloadProgress={downloadProgress}
+                onUpdateClick={handleUpdateBadgeClick}
+              />
             </div>
 
             <ToolbarActions
@@ -131,6 +179,21 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefresh, isRefreshing = false, show
         validatePassword={passwordDialog.validatePassword}
         onSubmit={passwordDialog.onSubmit}
         onCancel={handlePasswordDialogCancel}
+      />
+
+      <UpdateDialog
+        isOpen={isUpdateDialogOpen}
+        onClose={() => setIsUpdateDialogOpen(false)}
+        state={updateState}
+        updateInfo={updateInfo}
+        progress={downloadProgress}
+        error={updateError}
+        onDownload={handleStartDownload}
+        onInstall={handleInstallAndRelaunch}
+        onDismiss={() => {
+          dismissUpdate();
+          setIsUpdateDialogOpen(false);
+        }}
       />
     </TooltipProvider>
   );
