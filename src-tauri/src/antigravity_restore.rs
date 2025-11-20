@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 // 导入 platform_utils 模块
 use crate::platform_utils;
+use crate::constants::database;
 
 /// 从备份的 Marker 中获取 Key 对应的 flag (0 或 1)
 /// 如果找不到，回退到安全默认值
@@ -25,10 +26,10 @@ fn get_marker_flag_from_backup(backup_marker: &Option<&Value>, key: &str) -> i32
     
     // 只有在备份文件损坏或是旧版本时才使用此回退逻辑
     let default = match key {
-        "antigravityAuthStatus" 
-        | "antigravity.profileUrl" 
-        | "antigravityOnboarding" 
-        | "antigravity_allowed_command_model_configs" => 0,
+        database::AUTH_STATUS
+        | database::PROFILE_URL
+        | database::ONBOARDING
+        | database::COMMAND_CONFIGS => 0,
         _ => 1,
     };
     println!("  ⚠️ 备份中没有 {} 的 Marker 信息，使用默认值: {}", key, default);
@@ -55,24 +56,14 @@ fn restore_database(db_path: &PathBuf, db_name: &str, backup_data: &Value) -> Re
     println!("🔄 恢复数据库: {}", db_name);
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
-    // 需要恢复的字段列表（与备份列表一致）
-    let keys_to_restore = vec![
-        "antigravityAuthStatus",
-        "antigravity.profileUrl",
-        "antigravityUserSettings.allUserSettings",
-        "antigravityOnboarding",
-        "google.antigravity",
-        "antigravity_allowed_command_model_configs",
-        "jetskiStateSync.agentManagerInitState",
-        "chat.ChatSessionStore.index",
-        "__$__isNewStorageMarker", // 关键：恢复这个状态标记
-    ];
+    // 使用常量定义需要恢复的字段列表（与备份列表一致）
+    let keys_to_restore = database::ALL_KEYS;
 
     let mut restored_count = 0;
     let mut restored_keys = Vec::new();
 
     // 1. 插入数据（Value 直接使用备份中的原始字符串）
-    for key in &keys_to_restore {
+    for key in keys_to_restore {
         if let Some(val) = backup_data.get(*key) {
             if let Some(val_str) = val.as_str() {
                 match conn.execute(
@@ -83,8 +74,8 @@ fn restore_database(db_path: &PathBuf, db_name: &str, backup_data: &Value) -> Re
                         println!("  ✅ 注入数据: {}", key);
                         restored_count += 1;
                         // 只有非特殊字段才需要在 Marker 中注册
-                        if *key != "__$__isNewStorageMarker" {
-                            restored_keys.push(*key);
+                        if key != &database::NEW_STORAGE_MARKER {
+                            restored_keys.push(key);
                         }
                     }
                     Err(e) => {
@@ -106,7 +97,7 @@ fn restore_database(db_path: &PathBuf, db_name: &str, backup_data: &Value) -> Re
         // A. 读取当前数据库的 Marker
         let current_marker_str: Option<String> = conn
             .query_row(
-                "SELECT value FROM ItemTable WHERE key = '__$__targetStorageMarker'",
+                &format!("SELECT value FROM ItemTable WHERE key = '{}'", database::TARGET_STORAGE_MARKER),
                 [],
                 |row| row.get(0),
             )
@@ -148,7 +139,7 @@ fn restore_database(db_path: &PathBuf, db_name: &str, backup_data: &Value) -> Re
             .map_err(|e| format!("序列化 Marker 失败: {}", e))?;
         
         conn.execute(
-            "INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('__$__targetStorageMarker', ?)",
+            &format!("INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('{}', ?)", database::TARGET_STORAGE_MARKER),
             [new_marker_str],
         ).map_err(|e| format!("更新 Marker 失败: {}", e))?;
         

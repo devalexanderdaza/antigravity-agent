@@ -7,19 +7,10 @@ use std::path::Path;
 
 // 导入 platform_utils 模块
 use crate::platform_utils;
+use crate::constants::database;
 
-/// 需要物理删除的字段
-const DELETE_KEYS: &[&str] = &[
-    "antigravityAuthStatus",
-    "antigravity.profileUrl",
-    "antigravityUserSettings.allUserSettings",
-    "antigravityOnboarding",
-    "google.antigravity",
-    "antigravity_allowed_command_model_configs",
-    // 如果需要清除对话历史，取消下面注释
-    // "jetskiStateSync.agentManagerInitState",
-    // "chat.ChatSessionStore.index"
-];
+/// 使用常量定义需要物理删除的字段
+const DELETE_KEYS: &[&str] = database::DELETE_KEYS;
 
 /// 智能更新 Marker：彻底移除指定的 Key（而非设为0）
 fn remove_keys_from_marker(conn: &Connection, keys_to_remove: &[&str]) -> Result<(), String> {
@@ -27,7 +18,7 @@ fn remove_keys_from_marker(conn: &Connection, keys_to_remove: &[&str]) -> Result
     
     let current_marker_json: Option<String> = conn
         .query_row(
-            "SELECT value FROM ItemTable WHERE key = '__$__targetStorageMarker'",
+            &format!("SELECT value FROM ItemTable WHERE key = '{}'", database::TARGET_STORAGE_MARKER),
             [],
             |row| row.get(0),
         )
@@ -52,7 +43,7 @@ fn remove_keys_from_marker(conn: &Connection, keys_to_remove: &[&str]) -> Result
             .map_err(|e| format!("序列化失败: {}", e))?;
 
         conn.execute(
-            "INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('__$__targetStorageMarker', ?)",
+            &format!("INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('{}', ?)", database::TARGET_STORAGE_MARKER),
             [new_marker_str],
         ).map_err(|e| format!("写入 Marker 失败: {}", e))?;
         

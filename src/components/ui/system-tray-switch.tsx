@@ -1,7 +1,6 @@
 import React from 'react';
 import * as Switch from '@radix-ui/react-switch';
-import { Monitor, Moon } from 'lucide-react';
-import { SystemTrayService } from '../../services/system-tray-service';
+import {SystemTrayService} from '../../services/system-tray-service';
 
 interface SystemTraySwitchProps {
   checked: boolean;
@@ -58,7 +57,6 @@ const SystemTraySwitch: React.FC<SystemTraySwitchProps> = ({
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-2">
-        <Monitor className="w-4 h-4 text-gray-600 dark:text-gray-400" />
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
           系统托盘
         </span>
@@ -72,21 +70,6 @@ const SystemTraySwitch: React.FC<SystemTraySwitchProps> = ({
       >
         <Switch.Thumb className="SwitchThumb" />
       </Switch.Root>
-
-      <div className="flex items-center gap-1">
-        {checked ? (
-          <>
-            <Moon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-            <span className="text-xs text-gray-600 dark:text-gray-400">
-              最小化
-            </span>
-          </>
-        ) : (
-          <span className="text-xs text-gray-500 dark:text-gray-500">
-              关闭
-            </span>
-        )}
-      </div>
 
       <style>{`
         .SwitchRoot {

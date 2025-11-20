@@ -1,9 +1,10 @@
 // 窗口状态管理模块
 // 负责保存和恢复应用程序窗口状态
 
-use std::path::PathBuf;
 use std::fs;
 use serde::{Deserialize, Serialize};
+
+use crate::config_manager::ConfigManager;
 
 // 窗口状态结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,14 +59,10 @@ pub async fn save_window_state(state: WindowState) -> Result<(), String> {
         return Ok(()); // 不返回错误，静默忽略
     }
 
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".antigravity-agent");
+    // 使用 ConfigManager 统一管理配置目录
+    let config_manager = ConfigManager::new()?;
+    let state_file = config_manager.window_state_file();
 
-    fs::create_dir_all(&config_dir)
-        .map_err(|e| format!("创建配置目录失败: {}", e))?;
-
-    let state_file = config_dir.join("window_state.json");
     let json_content = serde_json::to_string(&state)
         .map_err(|e| format!("序列化窗口状态失败: {}", e))?;
 
@@ -80,11 +77,9 @@ pub async fn save_window_state(state: WindowState) -> Result<(), String> {
 
 /// 加载窗口状态
 pub async fn load_window_state() -> Result<WindowState, String> {
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".antigravity-agent");
-
-    let state_file = config_dir.join("window_state.json");
+    // 使用 ConfigManager 统一管理配置目录
+    let config_manager = ConfigManager::new()?;
+    let state_file = config_manager.window_state_file();
 
     if state_file.exists() {
         let content = fs::read_to_string(&state_file)
