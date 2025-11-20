@@ -7,6 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::platform_utils;
+use crate::constants::database;
 
 /// 智能备份 Antigravity 账户（终极版 - 保存完整 Marker）
 ///
@@ -43,23 +44,13 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
 
     let conn = Connection::open(&app_data).map_err(|e| e.to_string())?;
 
-    // 定义所有需要备份的关键字段
-    let keys_to_backup = vec![
-        "antigravityAuthStatus",
-        "antigravity.profileUrl",
-        "antigravityUserSettings.allUserSettings",
-        "antigravityOnboarding",
-        "google.antigravity",
-        "antigravity_allowed_command_model_configs",
-        "jetskiStateSync.agentManagerInitState",
-        "chat.ChatSessionStore.index",
-        "__$__isNewStorageMarker", // 关键：同步这个状态标记
-    ];
+    // 使用常量定义所有需要备份的关键字段
+    let keys_to_backup = database::ALL_KEYS;
 
     let mut data_map = serde_json::Map::new();
 
     // 1. 提取数据（保持原始字符串格式）
-    for key in &keys_to_backup {
+    for key in keys_to_backup {
         let val: Option<String> = conn
             .query_row(
                 "SELECT value FROM ItemTable WHERE key = ?",
@@ -80,7 +71,7 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
     // 2. 提取并解析 Marker（作为恢复时的参考书）
     let marker_json: Option<String> = conn
         .query_row(
-            "SELECT value FROM ItemTable WHERE key = '__$__targetStorageMarker'",
+            &format!("SELECT value FROM ItemTable WHERE key = '{}'", database::TARGET_STORAGE_MARKER),
             [],
             |row| row.get(0),
         )
@@ -91,7 +82,7 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
         // 将 Marker 解析为对象存入备份
         if let Ok(parsed_marker) = serde_json::from_str::<Value>(&m) {
             println!("  📋 备份完整 Marker（作为恢复参考）");
-            data_map.insert("__$__targetStorageMarker".to_string(), parsed_marker);
+            data_map.insert(database::TARGET_STORAGE_MARKER.to_string(), parsed_marker);
         }
     }
 
