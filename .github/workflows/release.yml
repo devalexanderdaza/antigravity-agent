@@ -92,6 +92,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Antigravity Agent v__VERSION__'
@@ -138,19 +140,33 @@ jobs:
           ## 📥 下载
 
           ### Windows
-          - [`antigravity-agent-x86_64-portable`](#artifacts) - 双击即用
-          - [`Antigravity-Agent_${VERSION}_x64-setup.exe`](#artifacts) - 安装版
+          - **[\`Antigravity-Agent_${VERSION}_x64-setup.exe\`](#assets)** - 安装版（✅ 支持自动更新）
+          - [\`antigravity-agent-x86_64-portable\`](#artifacts) - 绿色便携版
 
           ### macOS
-          - [`antigravity-agent-aarch64-portable`](#artifacts) - Apple Silicon
-          - [`antigravity-agent-x86_64-portable`](#artifacts) - Intel Mac
+          - [\`antigravity-agent-aarch64-portable\`](#artifacts) - Apple Silicon
+          - [\`antigravity-agent-x86_64-portable\`](#artifacts) - Intel Mac（
 
           ### Linux
-          - [`antigravity-agent-x86_64-portable`](#artifacts) - 绿色版
+          - [\`antigravity-agent-x86_64-portable\`](#artifacts) - 绿色版
+
+          ## 🔄 自动更新说明
+
+          **NSIS 安装版（推荐）**
+          - ✅ 应用内一键更新，无需手动下载
+          - ✅ 应用启动后自动检查更新
+          - ✅ 点击更新徽章即可下载并安装
+          - ✅ 安装到用户目录，无需管理员权限
+
+          **Portable 便携版**
+          - ❌ 不支持自动更新，需要手动下载新版本
+          - ✅ 适合喜欢绿色软件的用户
+          - ✅ 无需安装，解压即用
+
+          ---
 
           支持 Windows 10+, macOS 10.15+, Linux x64
 
-          ---
           🙏 感谢使用 Antigravity Agent！如果觉得有用，请给我们一个 ⭐️
           EOF
 
