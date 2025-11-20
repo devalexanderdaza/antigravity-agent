@@ -15,9 +15,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        include:
+          - platform: macos-latest
+            arch: aarch64
+            runs-on: macos-14
+            target: aarch64-apple-darwin
+          - platform: macos-13
+            arch: x86_64
+            runs-on: macos-13
+            target: x86_64-apple-darwin
+          - platform: ubuntu-20.04
+            arch: x86_64
+            runs-on: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            arch: x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
 
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,6 +46,8 @@ jobs:
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -82,6 +100,17 @@ jobs:
           prerelease: false
           includeDebug: false
           includeRelease: true
+          args: --target ${{ matrix.target }}
+
+      - name: Upload standalone binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: antigravity-agent-${{ matrix.arch }}-portable
+          path: |
+            ${{ github.workspace }}/src-tauri/target/${{ matrix.target }}/release/antigravity-agent.exe
+            ${{ github.workspace }}/src-tauri/target/${{ matrix.target }}/release/antigravity-agent
+          retention-days: 30
+        continue-on-error: true
 
   create-release:
     needs: build
@@ -106,42 +135,23 @@ jobs:
           cat > release_notes.md << EOF
           # Antigravity Agent v$VERSION
 
-          ## 🚀 新功能
-          - 轻松切换和管理多个 Antigravity 账户
-          - 跨平台支持 (Windows, macOS, Linux)
-          - 直观的用户界面，支持一键账户切换
-          - 实时状态反馈和错误处理
-          - 自动备份和恢复用户配置文件
-          - 加密导入导出功能
-
-          ## 📦 安装说明
+          ## 📥 下载
 
           ### Windows
-          1. 下载 \`Antigravity-Agent_\${VERSION}_x64-setup.exe\`
-          2. 运行安装程序并按照提示完成安装
-          3. 启动 "Antigravity Agent"
+          - [`antigravity-agent-x86_64-portable`](#artifacts) - 双击即用
+          - [`Antigravity-Agent_${VERSION}_x64-setup.exe`](#artifacts) - 安装版
 
           ### macOS
-          1. 下载 \`Antigravity-Agent_\${VERSION}_x64.dmg\`
-          2. 双击 DMG 文件打开安装器
-          3. 将应用拖拽到 Applications 文件夹
-          4. 从 Launchpad 启动应用
+          - [`antigravity-agent-aarch64-portable`](#artifacts) - Apple Silicon
+          - [`antigravity-agent-x86_64-portable`](#artifacts) - Intel Mac
 
           ### Linux
-          1. 下载 \`Antigravity-Agent_\${VERSION}_amd64.AppImage\`
-          2. 添加执行权限: \`chmod +x Antigravity-Agent_\${VERSION}_amd64.AppImage\`
-          3. 运行: \`./Antigravity-Agent_\${VERSION}_amd64.AppImage\`
+          - [`antigravity-agent-x86_64-portable`](#artifacts) - 绿色版
 
-          ## 🔧 系统要求
-          - Windows 10/11 (x64)
-          - macOS 10.15+ (x64)
-          - Ubuntu 20.04+ 或其他现代 Linux 发行版 (x64)
+          支持 Windows 10+, macOS 10.15+, Linux x64
 
-          ## 🐛 问题反馈
-          如果遇到问题，请在 [GitHub Issues](https://github.com/${{ github.repository }}/issues) 中报告。
-
-          ## 📄 许可证
-          本项目采用 MIT 许可证。详见 [LICENSE](https://github.com/${{ github.repository }}/blob/main/LICENSE) 文件。
+          ---
+          🙏 感谢使用 Antigravity Agent！如果觉得有用，请给我们一个 ⭐️
           EOF
 
           # 设置输出
