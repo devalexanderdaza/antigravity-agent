@@ -127,6 +127,21 @@ jobs:
             mv "Antigravity Agent.app.tar.gz.sig" "Antigravity Agent_${{ matrix.arch }}.app.tar.gz.sig"
           fi
 
+      - name: Upload renamed macOS artifacts
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          cd src-tauri/target/${{ matrix.target }}/release/bundle/macos/
+          if [ -f "Antigravity Agent_${{ matrix.arch }}.app.tar.gz" ]; then
+            gh release upload autobuild "Antigravity Agent_${{ matrix.arch }}.app.tar.gz" --clobber
+          fi
+          if [ -f "Antigravity Agent_${{ matrix.arch }}.app.tar.gz.sig" ]; then
+            gh release upload autobuild "Antigravity Agent_${{ matrix.arch }}.app.tar.gz.sig" --clobber
+          fi
+          echo "✅ Uploaded renamed macOS artifacts"
+
       - name: Create Windows Portable Version
         if: matrix.platform == 'windows-latest'
         shell: pwsh
