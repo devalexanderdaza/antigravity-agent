@@ -8,7 +8,6 @@ use std::path::PathBuf;
 
 // 导入相关模块
 use crate::constants::database;
-use crate::path_utils::AppPaths;
 use crate::platform_utils;
 
 /// 从备份的 Marker 中获取 Key 对应的 flag (0 或 1)
@@ -98,7 +97,42 @@ fn restore_database(
         }
     }
 
-    // 2. 智能合并 Marker
+    // 2. 恢复通知字段（避免历史通知重复弹窗）
+    if let Some(notification_keys_value) = backup_data.get("notification_keys") {
+        if let Some(notification_keys) = notification_keys_value.as_array() {
+            if !notification_keys.is_empty() {
+                println!("  📬 开始恢复 {} 个通知字段...", notification_keys.len());
+                let mut notification_count = 0;
+
+                for notification_key_value in notification_keys {
+                    if let Some(notification_key) = notification_key_value.as_str() {
+                        // 查找对应的通知数据
+                        if let Some(notification_data) = backup_data.get(notification_key) {
+                            if let Some(notification_str) = notification_data.as_str() {
+                                match conn.execute(
+                                    "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)",
+                                    params![notification_key, notification_str],
+                                ) {
+                                    Ok(_) => {
+                                        println!("  ✅ 恢复通知: {}", notification_key);
+                                        notification_count += 1;
+                                        // 通知字段不添加到 restored_keys 中，因为它们通常不需要参与 Marker 同步
+                                    }
+                                    Err(e) => {
+                                        println!("  ⚠️ 恢复通知失败 {}: {}", notification_key, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                println!("  ✅ 成功恢复 {} 个通知字段", notification_count);
+            }
+        }
+    }
+
+    // 3. 智能合并 Marker
     if !restored_keys.is_empty() {
         println!("  🔧 开始智能合并 Marker...");
 
