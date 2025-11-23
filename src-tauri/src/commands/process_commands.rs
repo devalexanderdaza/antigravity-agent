@@ -24,7 +24,7 @@ pub async fn is_antigravity_running() -> bool {
 pub async fn list_antigravity_processes() -> Result<Vec<serde_json::Value>, String> {
     use serde_json::json;
 
-    log::info!("🔍 搜索所有 Antigravity 相关进程");
+  tracing::info!("🔍 搜索所有 Antigravity 相关进程");
 
     let mut system = sysinfo::System::new_all();
     system.refresh_all();
@@ -52,7 +52,7 @@ pub async fn list_antigravity_processes() -> Result<Vec<serde_json::Value>, Stri
         }
     }
 
-    log::info!("📊 找到 {} 个 Antigravity 相关进程", found_processes.len());
+  tracing::info!("📊 找到 {} 个 Antigravity 相关进程", found_processes.len());
     Ok(found_processes)
 }
 

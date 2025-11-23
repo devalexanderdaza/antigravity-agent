@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils.ts';
 import { Eye, EyeOff, Lock } from 'lucide-react';
 
 export interface BaseInputProps extends React.InputHTMLAttributes<HTMLInputElement> {

@@ -4,14 +4,20 @@
 use rusqlite::Result as SqlResult;
 use serde_json::Value;
 use tauri::State;
+use tracing::instrument;
 
 /// 切换 Antigravity 账户
 #[tauri::command]
+#[instrument(fields(account_id = %account_id))]
 pub async fn switch_antigravity_account(
     account_id: String,
     _state: State<'_, crate::AppState>,
 ) -> Result<String, String> {
-    crate::log_async_command!("switch_antigravity_account", async {
+  tracing::info!("开始切换 Antigravity 账户");
+
+  let start_time = std::time::Instant::now();
+
+  let result = async {
         // 获取 Antigravity 状态数据库路径
         let app_data = match crate::platform_utils::get_antigravity_db_path() {
             Some(path) => path,
@@ -37,7 +43,7 @@ pub async fn switch_antigravity_account(
             .map_err(|e| format!("连接数据库失败 ({}): {}", app_data.display(), e))?;
 
         // 记录数据库操作
-        crate::utils::log_decorator::log_database_operation("连接数据库", Some("ItemTable"), true);
+    crate::utils::tracing_config::log_database_operation("连接数据库", Some("ItemTable"), true);
 
         // 这里应该加载并更新账户信息
         // 由于状态管理的复杂性，我们先返回成功信息
@@ -46,23 +52,51 @@ pub async fn switch_antigravity_account(
             account_id,
             app_data.display()
         ))
-    })
+  }.await;
+
+  let duration = start_time.elapsed();
+
+  match result {
+    Ok(msg) => {
+      tracing::info!(
+                duration_ms = duration.as_millis(),
+                "账户切换操作完成"
+            );
+      Ok(msg)
+    }
+    Err(e) => {
+      tracing::error!(
+                error = %e,
+                duration_ms = duration.as_millis(),
+                "账户切换操作失败"
+            );
+      Err(e)
+    }
+  }
 }
 
 /// 获取所有 Antigravity 账户
 #[tauri::command]
+#[instrument]
 pub async fn get_antigravity_accounts(
     _state: State<'_, crate::AppState>,
 ) -> Result<Vec<crate::AntigravityAccount>, String> {
-    // 这里应该从存储中加载账户列表
+  tracing::info!("获取所有 Antigravity 账户");
+
+  // 这里应该从存储中加载账户列表
     // 暂时返回空列表
     Ok(vec![])
 }
 
 /// 获取当前 Antigravity 信息
 #[tauri::command]
+#[instrument]
 pub async fn get_current_antigravity_info() -> Result<Value, String> {
-    crate::log_async_command!("get_current_antigravity_info", async {
+  tracing::info!("开始获取当前 Antigravity 信息");
+
+  let start_time = std::time::Instant::now();
+
+  let result = async {
         // 尝试获取 Antigravity 状态数据库路径
         let app_data = match crate::platform_utils::get_antigravity_db_path() {
             Some(path) => path,
@@ -108,14 +142,38 @@ pub async fn get_current_antigravity_info() -> Result<Value, String> {
             }
             Err(e) => Err(format!("查询认证信息失败: {}", e)),
         }
-    })
+  }.await;
+
+  let duration = start_time.elapsed();
+
+  match result {
+    Ok(data) => {
+      tracing::info!(
+                duration_ms = duration.as_millis(),
+                "获取 Antigravity 信息完成"
+            );
+      Ok(data)
+    }
+    Err(e) => {
+      tracing::error!(
+                error = %e,
+                duration_ms = duration.as_millis(),
+                "获取 Antigravity 信息失败"
+            );
+      Err(e)
+    }
+  }
 }
 
 /// 备份当前 Antigravity 账户
 #[tauri::command]
+#[instrument]
 pub async fn backup_antigravity_current_account() -> Result<String, String> {
-    crate::log_async_command!("backup_antigravity_current_account", async {
-        log::info!("📥 开始备份当前账户");
+  tracing::info!("📥 开始备份当前账户");
+
+  let start_time = std::time::Instant::now();
+
+  let result = async {
 
         // 尝试获取 Antigravity 状态数据库路径
         let app_data = match crate::platform_utils::get_antigravity_db_path() {
@@ -154,38 +212,59 @@ pub async fn backup_antigravity_current_account() -> Result<String, String> {
                     Ok(auth_data) => {
                         // 尝试获取邮箱
                         if let Some(email) = auth_data.get("email").and_then(|v| v.as_str()) {
-                            log::info!("📧 检测到当前用户: {}", email);
+                          tracing::info!(user_email = email, "📧 检测到当前用户");
 
                             // 调用智能备份函数，让它处理去重逻辑和文件名生成
                             match crate::antigravity_backup::smart_backup_antigravity_account(email) {
                                 Ok((backup_name, is_overwrite)) => {
                                     let action = if is_overwrite { "更新" } else { "备份" };
                                     let message = format!("Antigravity 账户 '{}'{}成功", backup_name, action);
-                                    log::info!("✅ {}", message);
+                                  tracing::info!(backup_name = %backup_name, action = %action, "✅ 智能备份完成");
                                     Ok(message)
                                 }
                                 Err(e) => {
-                                    log::error!("❌ 智能备份失败: {}", e);
+                                  tracing::error!(error = %e, "❌ 智能备份失败");
                                     Err(e)
                                 }
                             }
                         } else {
-                            log::warn!("⚠️ 认证信息中未找到邮箱字段");
+                          tracing::warn!("⚠️ 认证信息中未找到邮箱字段");
                             Err("未检测到已登录用户".to_string())
                         }
                     }
                     Err(e) => {
-                        log::error!("❌ 解析认证信息失败: {}", e);
+                      tracing::error!(error = %e, "❌ 解析认证信息失败");
                         Err("解析认证信息失败".to_string())
                     }
                 }
             }
             Err(e) => {
-                log::warn!("⚠️ 查询认证信息失败: {}", e);
+              tracing::warn!(error = %e, "⚠️ 查询认证信息失败");
                 Err("未检测到已登录用户".to_string())
             }
         }
-    })
+  }.await;
+
+  let duration = start_time.elapsed();
+
+  match result {
+    Ok(message) => {
+      tracing::info!(
+                duration_ms = duration.as_millis(),
+                result_message = %message,
+                "账户备份操作完成"
+            );
+      Ok(message)
+    }
+    Err(e) => {
+      tracing::error!(
+                error = %e,
+                duration_ms = duration.as_millis(),
+                "账户备份操作失败"
+            );
+      Err(e)
+    }
+  }
 }
 
 /// 清除所有 Antigravity 数据
@@ -217,7 +296,7 @@ pub async fn restore_antigravity_account(account_name: String) -> Result<String,
 #[tauri::command]
 pub async fn switch_to_antigravity_account(account_name: String) -> Result<String, String> {
     crate::log_async_command!("switch_to_antigravity_account", async {
-        log::info!("🔄 开始执行切换到账户: {}", account_name);
+        tracing::info!("🔄 开始执行切换到账户: {}", account_name);
 
         // 1. 关闭 Antigravity 进程 (如果存在)
         println!("🛑 步骤1: 检查并关闭 Antigravity 进程");
@@ -267,7 +346,7 @@ pub async fn switch_to_antigravity_account(account_name: String) -> Result<Strin
         };
 
         let final_message = format!("{} -> {} -> {}", kill_result, restore_result, start_message);
-        log::info!("🎉 账户切换完成: {}", final_message);
+        tracing::info!("🎉 账户切换完成: {}", final_message);
 
         Ok(final_message)
     })

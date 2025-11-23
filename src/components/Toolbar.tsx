@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Download, Upload } from 'lucide-react';
+import React, {useMemo, useState} from 'react';
+import {Download, Plus, RefreshCw, Upload} from 'lucide-react';
 import BusinessUpdateDialog from './business/UpdateDialog';
 import BusinessConfirmDialog from './business/ConfirmDialog';
 import BusinessActionButton from './business/ActionButton';
-import { TooltipProvider } from './ui/tooltip';
+import {TooltipProvider} from './ui/tooltip';
 import ToolbarTitle from './ui/toolbar-title';
-import { SilentLogExport } from './SilentLogExport';
-import { useUpdateChecker } from '../hooks/useUpdateChecker';
+import {useUpdateChecker} from '../hooks/useUpdateChecker';
+import {useUserManagement} from '@/modules/user-management/store';
+import {useDbMonitoringStore} from "@/modules/db-monitoring-store.ts";
 
 interface LoadingState {
   isProcessLoading: boolean;
@@ -15,10 +16,6 @@ interface LoadingState {
 }
 
 interface ToolbarProps {
-  // 刷新
-  onRefresh: () => void;
-  isRefreshing?: boolean;
-
   // 配置管理
   onImport: () => void;
   onExport: () => void;
@@ -37,8 +34,6 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
-  onRefresh,
-  isRefreshing = false,
   onImport,
   onExport,
   hasUserData,
@@ -48,6 +43,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   showStatus,
   onSettingsClick
 }) => {
+  const {addCurrentUser} = useUserManagement();
+  const {dbMonitoringEnabled} = useDbMonitoringStore();
 
   // 确认对话框状态（用于"登录新账户"操作）
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -134,38 +131,45 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const isAnyLoading = useMemo(() => {
     return loadingState.isProcessLoading ||
       loadingState.isImporting ||
-      loadingState.isExporting ||
-      isRefreshing;
-  }, [loadingState, isRefreshing]);
+        loadingState.isExporting;
+  }, [loadingState]);
 
   return (
     <TooltipProvider delayDuration={300}>
       <div className="toolbar bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 backdrop-blur-sm shadow-sm">
         <div className="toolbar-content max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center flex-row">
               <ToolbarTitle
                 updateState={updateState}
                 downloadProgress={downloadProgress}
                 onUpdateClick={handleUpdateBadgeClick}
               />
+
+              {/* 添加当前用户按钮 */}
+              <button
+                onClick={async () => {
+                  try {
+                    await addCurrentUser();
+                    showStatus('已添加当前用户', false);
+                  } catch (error) {
+                    showStatus(`添加当前用户失败: ${error}`, true);
+                  }
+                }}
+                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title={dbMonitoringEnabled ? "数据库监控中 - 添加当前用户" : "添加当前用户"}
+              >
+                <RefreshCw
+                  className={`w-3 h-3 ${dbMonitoringEnabled ? 'animate-spin' : ''}`}
+                  style={dbMonitoringEnabled ? {
+                    animationDuration: '2s'
+                  } : {}}
+                />
+              </button>
+
             </div>
 
             <div className="flex items-center gap-2">
-              {/* 刷新按钮 */}
-              <button
-                onClick={() => {
-                  console.log('🔘 [Toolbar] 刷新按钮被点击');
-                  onRefresh();
-                }}
-                disabled={isRefreshing}
-                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                title="刷新"
-              >
-                <svg className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
 
               {/* 操作按钮 */}
               <BusinessActionButton

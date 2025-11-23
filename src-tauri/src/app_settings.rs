@@ -14,6 +14,8 @@ pub struct AppSettings {
     pub system_tray_enabled: bool,
     /// 是否启用数据库监控
     pub db_monitoring_enabled: bool,
+    /// 是否启用静默启动（启动时最小化到托盘或后台）
+    pub silent_start_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -21,6 +23,7 @@ impl Default for AppSettings {
         Self {
             system_tray_enabled: false, // 默认不启用，避免打扰用户
             db_monitoring_enabled: true, // 默认启用数据库监控
+            silent_start_enabled: false, // 默认不启用静默启动，让用户看到应用界面
         }
     }
 }

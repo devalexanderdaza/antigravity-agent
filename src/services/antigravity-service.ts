@@ -32,15 +32,6 @@ export class AntigravityService {
    * 获取备份列表
    */
   static async getBackupList(): Promise<string[]> {
-    try {
-      const backupList = await invoke('list_backups') as string[];
-      if (!backupList) {
-        throw new Error('无法获取备份列表');
-      }
-      return backupList;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`获取备份列表失败: ${errorMessage}`);
-    }
+    return invoke('list_backups')
   }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils.ts';
 
 export interface BusinessStatusNotificationProps {
   status: {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, FolderOpen, FileCode, Shield, Database, Zap, Monitor, Check, AlertCircle, Info } from 'lucide-react';
+import { Settings, FolderOpen, FileCode, Shield, Database, Zap, Monitor, Check, AlertCircle, Info, VolumeX } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { AntigravityPathService } from '../../services/antigravity-path-service';
@@ -12,6 +12,7 @@ import {
 import { BaseButton } from '@/components/base-ui/BaseButton';
 import { BaseSpinner } from '@/components/base-ui/BaseSpinner';
 import { SystemTrayService } from '../../services/system-tray-service';
+import { SilentStartService } from '../../services/silent-start-service';
 
 interface BusinessSettingsDialogProps {
   isOpen: boolean;
@@ -36,11 +37,16 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
   const [isSystemTrayEnabled, setIsSystemTrayEnabled] = useState(true);
   const [isTrayLoading, setIsTrayLoading] = useState(false);
 
+  // 静默启动状态
+  const [isSilentStartEnabled, setIsSilentStartEnabled] = useState(false);
+  const [isSilentStartLoading, setIsSilentStartLoading] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       loadCurrentPaths();
       loadCurrentSettings();
       loadSystemTraySettings();
+      loadSilentStartSettings();
     }
   }, [isOpen]);
 
@@ -132,6 +138,34 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       setMessageType('error');
     } finally {
       setIsTrayLoading(false);
+    }
+  };
+
+  const loadSilentStartSettings = async () => {
+    try {
+      // 加载静默启动状态
+      const silentStartEnabled = await SilentStartService.getSilentStartState();
+      setIsSilentStartEnabled(silentStartEnabled);
+    } catch (error) {
+      console.error('加载静默启动设置失败:', error);
+      // 使用默认值
+      setIsSilentStartEnabled(false);
+    }
+  };
+
+  const handleSilentStartToggle = async (enabled: boolean) => {
+    setIsSilentStartLoading(true);
+    try {
+      const result = await SilentStartService.setSilentStartEnabled(enabled);
+      setIsSilentStartEnabled(result.enabled);
+      setMessage(result.message);
+      setMessageType(result.enabled ? 'success' : 'info');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage(`静默启动切换失败: ${error}`);
+      setMessageType('error');
+    } finally {
+      setIsSilentStartLoading(false);
     }
   };
 
@@ -411,6 +445,56 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
                     <span
                       className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition-all duration-300 ${
                         isSystemTrayEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 静默启动设置 - 全宽卡片 */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                  <VolumeX className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">静默启动</h3>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">启动时最小化到后台</span>
+                  {isSilentStartEnabled ? (
+                    <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-purple-400 rounded-full animate-ping opacity-25"></div>
+                        <div className="relative w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full"></div>
+                      </div>
+                      <span className="text-xs font-medium">已启用</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                      <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
+                      <span className="text-xs font-medium">已禁用</span>
+                    </div>
+                  )}
+                </div>
+
+                {isSilentStartLoading ? (
+                  <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded">
+                    <div className="animate-spin rounded-full h-3 w-3 border border-gray-300 border-t-purple-600"></div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleSilentStartToggle(!isSilentStartEnabled)}
+                    disabled={isSilentStartLoading}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                      isSilentStartEnabled ? 'bg-purple-600 shadow-lg shadow-purple-600/30' : 'bg-gray-200 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition-all duration-300 ${
+                        isSilentStartEnabled ? 'translate-x-4' : 'translate-x-0.5'
                       }`}
                     />
                   </button>

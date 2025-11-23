@@ -1,8 +1,8 @@
+use dirs::*;
 /// 统一的跨平台路径处理工具
 ///
 /// 提供跨平台兼容的路径处理方法，避免硬编码路径
 use std::path::PathBuf;
-use dirs::*;
 
 /// 应用程序相关路径管理器
 pub struct AppPaths;
@@ -22,8 +22,11 @@ impl AppPaths {
             _ => Self::fallback_antigravity_data_dir(),
         };
 
-        log::info!("🔍 检测 Antigravity 数据目录: {:?}",
-            result.as_ref().map(|p| p.display()));
+      match &result {
+        Some(path) => tracing::info!("🔍 检测 Antigravity 数据目录: {}",
+                path.display()),
+        None => tracing::info!("🔍 检测 Antigravity 数据目录: None"),
+      }
 
         result
     }
@@ -172,32 +175,9 @@ impl AppPaths {
             .map(|path| path.join(".antigravity-agent"))
     }
 
-    /// 获取日志目录
-    pub fn log_dir() -> Option<PathBuf> {
-        Self::config_dir().map(|path| path.join("logs"))
-    }
-
     /// 获取备份目录
     pub fn backup_dir() -> Option<PathBuf> {
         Self::config_dir().map(|path| path.join("antigravity-accounts"))
-    }
-
-    /// 获取个人备份目录
-    pub fn profile_backup_dir() -> Option<PathBuf> {
-        Self::config_dir().map(|path| path.join("backups"))
-    }
-
-    /// 验证路径是否有效
-    pub fn is_valid_path(path: &PathBuf) -> bool {
-        path.exists() && (path.is_file() || path.is_dir())
-    }
-
-    /// 安全创建目录（如果不存在）
-    pub fn ensure_dir_exists(path: &PathBuf) -> Result<(), std::io::Error> {
-        if !path.exists() {
-            std::fs::create_dir_all(path)?;
-        }
-        Ok(())
     }
 
     // Windows 特定的辅助方法

@@ -1,21 +1,19 @@
-import React, { useState, useCallback } from 'react';
-import { useDevToolsShortcut } from './hooks/useDevToolsShortcut';
-import { usePasswordDialog } from './hooks/use-password-dialog';
-import { useBackupManagement } from './hooks/use-backup-management';
-import { useConfigManager } from './hooks/use-config-manager';
-import { useAntigravityProcess } from './hooks/use-antigravity-process';
-import { useAutoDatabaseListener } from './hooks/useDatabaseListener';
-import { invoke } from '@tauri-apps/api/core';
-import { useDatabaseStore } from './stores/databaseStore';
+import React, {useCallback, useEffect, useState} from 'react';
+import {useDevToolsShortcut} from './hooks/useDevToolsShortcut';
+import {usePasswordDialog} from './hooks/use-password-dialog';
+import {useUserManagement} from './modules/user-management/store';
+import {DATABASE_EVENTS, useDbMonitoringStore} from './modules/db-monitoring-store';
+import useConfigManager from './modules/config-management/useConfigStore';
+import {useAntigravityProcess} from './hooks/use-antigravity-process';
 import BusinessManageSection from './components/business/ManageSection';
 import StatusNotification from './components/StatusNotification';
 import Toolbar from './components/Toolbar';
 import AntigravityPathDialog from './components/AntigravityPathDialog';
 import BusinessSettingsDialog from './components/business/SettingsDialog';
 import PasswordDialog from './components/PasswordDialog';
-import { TooltipProvider } from './components/ui/tooltip';
-import { AntigravityPathService } from './services/antigravity-path-service';
-import { exit } from '@tauri-apps/plugin-process';
+import {TooltipProvider} from './components/ui/tooltip';
+import {AntigravityPathService} from './services/antigravity-path-service';
+import {exit} from '@tauri-apps/plugin-process';
 
 interface Status {
   message: string;
@@ -26,9 +24,9 @@ interface Status {
  * 统一应用组件
  * 整合启动流程和业务逻辑，消除重复代码
  */
-function App() {
+function AppContent() {
   // ========== 应用状态 ==========
-  const [status, setStatus] = useState<Status>({ message: '', isError: false });
+  const [status, setStatus] = useState<Status>({message: '', isError: false});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDetecting, setIsDetecting] = useState(true);
   const [isPathDialogOpen, setIsPathDialogOpen] = useState(false);
@@ -38,51 +36,41 @@ function App() {
 
   // 状态提示
   const showStatus = useCallback((message: string, isError: boolean = false): void => {
-    setStatus({ message, isError });
-    setTimeout(() => setStatus({ message: '', isError: false }), 5000);
+    setStatus({message, isError});
+    setTimeout(() => setStatus({message: '', isError: false}), 5000);
   }, []);
 
   // 密码对话框
-  const { passwordDialog, showPasswordDialog, closePasswordDialog, handlePasswordDialogCancel } = usePasswordDialog(showStatus);
+  const {
+    passwordDialog,
+    showPasswordDialog,
+    closePasswordDialog,
+    handlePasswordDialogCancel
+  } = usePasswordDialog(showStatus);
 
-  // 备份管理
-  const { backups, isRefreshing, refreshBackupList, handleRefresh } = useBackupManagement(showStatus);
+  // 用户管理
+  const {addCurrentUser} = useUserManagement();
 
-  // 自动数据库监听（需要根据设置状态启动）
-  const databaseRefreshCallback = useCallback(() => refreshBackupList(true), [refreshBackupList]);
-  useAutoDatabaseListener(databaseRefreshCallback);
+  // 监听数据库变化事件
+  const {loadSettings, addListener} = useDbMonitoringStore();
 
-  // 加载并同步数据库监控设置
-  const { setAutoRefreshEnabled } = useDatabaseStore();
-
-  React.useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        // 加载数据库监控设置
-        const dbMonitoringEnabled = await invoke<boolean>('is_db_monitoring_enabled');
-        setAutoRefreshEnabled(dbMonitoringEnabled);
-        console.log('📋 数据库监控设置已同步:', dbMonitoringEnabled);
-      } catch (error) {
-        console.error('加载监控设置失败:', error);
-        // 使用默认值
-        setAutoRefreshEnabled(true);
-      }
-    };
-
-    loadSettings();
-  }, [setAutoRefreshEnabled]);
+  useEffect(() => {
+    loadSettings()
+    return addListener(DATABASE_EVENTS.DATA_CHANGED, addCurrentUser)
+  }, []);
 
   // 配置管理
-  const { configLoadingState, hasUserData, isCheckingData, importConfig, exportConfig } = useConfigManager(
+  const {isImporting, isExporting, hasUserData, isCheckingData, importConfig, exportConfig} = useConfigManager(
     showStatus,
     showPasswordDialog,
     closePasswordDialog,
-    handleRefresh,
-    isRefreshing
+    () => {
+    }, // 空的 onRefresh 函数
+    false   // isRefreshing = false
   );
 
   // 进程管理
-  const { isProcessLoading, backupAndRestartAntigravity } = useAntigravityProcess(showStatus, handleRefresh);
+  const {isProcessLoading, backupAndRestartAntigravity} = useAntigravityProcess(showStatus, () => {});
 
   // ========== 初始化启动流程 ==========
   const initializeApp = useCallback(async () => {
@@ -100,12 +88,6 @@ function App() {
       if (bothFound) {
         console.log('✅ Antigravity 检测成功');
         setIsDetecting(false);
-        // 延迟一点时间，确保UI渲染完成后再加载备份列表
-        setTimeout(() => {
-          refreshBackupList(true).catch(error => {
-            console.error('初始化备份列表失败:', error);
-          });
-        }, 100);
       } else {
         console.log('⚠️ Antigravity 未找到，显示路径选择');
         setIsDetecting(false);
@@ -116,7 +98,7 @@ function App() {
       setIsDetecting(false);
       setIsPathDialogOpen(true);
     }
-  }, [refreshBackupList]);
+  }, []);
 
   // 路径选择处理
   const handlePathSelected = useCallback(async () => {
@@ -134,55 +116,50 @@ function App() {
   }, []);
 
   // 组件启动时执行初始化
-  React.useEffect(() => {
+  useEffect(() => {
     initializeApp();
   }, [initializeApp]);
 
   // 合并 loading 状态
   const loadingState = {
     isProcessLoading,
-    isImporting: configLoadingState.isImporting,
-    isExporting: configLoadingState.isExporting
+    isImporting,
+    isExporting
   };
 
   // ========== 渲染逻辑 ==========
   if (isDetecting) {
     return (
-      <TooltipProvider>
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 mx-auto mb-6 text-blue-500"></div>
-            <h2 className="text-2xl font-semibold mb-2 text-gray-800 dark:text-gray-100">
-              正在检测 Antigravity...
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400">
-              请稍候，正在查找 Antigravity 安装路径
-            </p>
-          </div>
+      <div
+        className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 mx-auto mb-6 text-blue-500"></div>
+          <h2 className="text-2xl font-semibold mb-2 text-gray-800 dark:text-gray-100">
+            正在检测 Antigravity...
+          </h2>
+          <p className="text-gray-500 dark:text-gray-400">
+            请稍候，正在查找 Antigravity 安装路径
+          </p>
         </div>
-      </TooltipProvider>
+      </div>
     );
   }
 
   if (isPathDialogOpen) {
-    return (
-      <TooltipProvider>
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-          <AntigravityPathDialog
-            isOpen={true}
-            onPathSelected={handlePathSelected}
-            onCancel={handlePathDialogCancel}
-          />
-        </div>
-      </TooltipProvider>
-    );
+    return <div
+      className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <AntigravityPathDialog
+        isOpen={true}
+        onPathSelected={handlePathSelected}
+        onCancel={handlePathDialogCancel}
+      />
+    </div>
+      ;
   }
 
   return (
-    <TooltipProvider>
+    <>
       <Toolbar
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
         onImport={importConfig}
         onExport={exportConfig}
         hasUserData={hasUserData}
@@ -195,13 +172,11 @@ function App() {
 
       <div className="container">
         <BusinessManageSection
-          backups={backups}
           showStatus={showStatus}
-          onRefresh={refreshBackupList}
         />
       </div>
 
-      <StatusNotification status={status} />
+      <StatusNotification status={status}/>
 
       <PasswordDialog
         isOpen={passwordDialog.isOpen}
@@ -222,8 +197,19 @@ function App() {
         isOpen={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
       />
-    </TooltipProvider>
+    </>
   );
+}
+
+/**
+ * 统一应用组件
+ * 整合启动流程和业务逻辑，消除重复代码
+ */
+function App() {
+  return <TooltipProvider>
+    <AppContent/>
+  </TooltipProvider>
+
 }
 
 export default App;

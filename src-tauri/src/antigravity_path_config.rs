@@ -42,8 +42,8 @@ pub fn save_custom_data_path(path: String) -> Result<(), String> {
     
     config.custom_data_path = Some(path);
     write_config(&config_file, &config)?;
-    
-    log::info!("✅ 已保存自定义 Antigravity 数据路径");
+
+  tracing::info!("✅ 已保存自定义 Antigravity 数据路径");
     Ok(())
 }
 
@@ -54,8 +54,8 @@ pub fn save_custom_executable_path(path: String) -> Result<(), String> {
     
     config.custom_executable_path = Some(path);
     write_config(&config_file, &config)?;
-    
-    log::info!("✅ 已保存自定义 Antigravity 可执行文件路径");
+
+  tracing::info!("✅ 已保存自定义 Antigravity 可执行文件路径");
     Ok(())
 }
 
@@ -103,7 +103,7 @@ pub fn clear_custom_path() -> Result<(), String> {
 
     if config_file.exists() {
         fs::remove_file(&config_file).map_err(|e| format!("删除配置文件失败: {}", e))?;
-        log::info!("✅ 已清除自定义 Antigravity 路径");
+      tracing::info!("✅ 已清除自定义 Antigravity 路径");
     }
 
     Ok(())

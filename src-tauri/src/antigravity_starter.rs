@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+
 /// 启动 Antigravity 应用程序（主入口函数）
 ///
 /// # 返回值
@@ -25,11 +26,11 @@ pub fn start_antigravity() -> Result<String, String> {
     if let Ok(Some(custom_exec)) = crate::antigravity_path_config::get_custom_executable_path() {
         let path = PathBuf::from(&custom_exec);
         if path.exists() && path.is_file() {
-            log::info!("📁 使用自定义 Antigravity 可执行文件: {}", custom_exec);
+            tracing::info!("📁 使用自定义 Antigravity 可执行文件: {}", custom_exec);
             return try_start_from_path(&path)
                 .map_err(|e| format!("无法启动自定义 Antigravity: {}. 请检查路径是否正确", e));
         } else {
-            log::warn!("⚠️ 自定义可执行文件路径无效: {}", custom_exec);
+            tracing::warn!("⚠️ 自定义可执行文件路径无效: {}", custom_exec);
         }
     }
     
@@ -273,13 +274,13 @@ fn try_start_from_commands(commands: Vec<&str>) -> Result<String, String> {
 
 /// 检测 Antigravity 可执行文件路径（不启动，只检测）
 pub fn detect_antigravity_executable() -> Option<PathBuf> {
-    log::info!("🔍 开始自动检测 Antigravity 可执行文件...");
+    tracing::info!("🔍 开始自动检测 Antigravity 可执行文件...");
 
     let paths = crate::path_utils::AppPaths::antigravity_executable_paths();
 
     let result = paths.into_iter().find(|p| {
         if p.exists() {
-            log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
+            tracing::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
             true
         } else {
             false
@@ -287,7 +288,7 @@ pub fn detect_antigravity_executable() -> Option<PathBuf> {
     });
 
     if result.is_none() {
-        log::warn!("⚠️ 未能自动检测到 Antigravity 可执行文件");
+        tracing::warn!("⚠️ 未能自动检测到 Antigravity 可执行文件");
     }
 
     result
