@@ -184,12 +184,18 @@ fn get_antigravity_macos_paths() -> Vec<PathBuf> {
     let mut antigravity_paths = Vec::new();
 
     // 基于 DMG 安装包的标准 .app 应用结构
+    // Antigravity 可能使用 Antigravity 或 Electron 作为二进制文件名
+    antigravity_paths.push(PathBuf::from(
+        "/Applications/Antigravity.app/Contents/MacOS/Electron",
+    ));
     antigravity_paths.push(PathBuf::from(
         "/Applications/Antigravity.app/Contents/MacOS/Antigravity",
     ));
 
     // 用户应用目录（用户手动安装时的常见位置）
     if let Some(home) = dirs::home_dir() {
+        antigravity_paths
+            .push(home.join("Applications/Antigravity.app/Contents/MacOS/Electron"));
         antigravity_paths
             .push(home.join("Applications/Antigravity.app/Contents/MacOS/Antigravity"));
     }
@@ -199,9 +205,30 @@ fn get_antigravity_macos_paths() -> Vec<PathBuf> {
 
 /// 获取 Linux 平台下 Antigravity 的可能安装路径
 fn get_antigravity_linux_paths() -> Vec<PathBuf> {
-    vec![
-        PathBuf::from("/usr/share/antigravity/antigravity"), // 启动脚本硬编码的默认路径
-    ]
+    let mut antigravity_paths = Vec::new();
+
+    // 1. 系统全局安装路径
+    antigravity_paths.push(PathBuf::from("/usr/share/antigravity/antigravity"));
+    antigravity_paths.push(PathBuf::from("/usr/bin/antigravity"));
+    antigravity_paths.push(PathBuf::from("/usr/local/bin/antigravity"));
+    
+    // 2. Snap 包安装路径
+    antigravity_paths.push(PathBuf::from("/snap/bin/antigravity"));
+    
+    // 3. AppImage 常见位置
+    if let Some(home) = dirs::home_dir() {
+        antigravity_paths.push(home.join("Applications/Antigravity.AppImage"));
+        antigravity_paths.push(home.join(".local/bin/antigravity"));
+        antigravity_paths.push(home.join("bin/antigravity"));
+    }
+    
+    // 4. Flatpak 安装路径
+    antigravity_paths.push(PathBuf::from("/var/lib/flatpak/exports/bin/antigravity"));
+    if let Some(home) = dirs::home_dir() {
+        antigravity_paths.push(home.join(".local/share/flatpak/exports/bin/antigravity"));
+    }
+
+    antigravity_paths
 }
 
 /// 尝试从指定路径启动应用程序
