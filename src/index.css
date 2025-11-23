@@ -84,7 +84,7 @@
   @apply flex items-center gap-2 transition-all duration-200;
 }
 
-/* 移除悬停放大效果，避免干扰长按操作 */
+/* 移除悬停放大效果，提升用户体验 */
 
 .toolbar-actions {
   @apply flex items-center gap-3 flex-wrap;

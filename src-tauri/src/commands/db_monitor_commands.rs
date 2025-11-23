@@ -1,9 +1,9 @@
 //! 数据库监控相关命令
 //! 提供数据库监控状态的查询和控制功能
 
-use tauri::{AppHandle, Manager};
 use crate::db_monitor::DatabaseMonitor;
 use std::sync::Arc;
+use tauri::{AppHandle, Manager};
 
 /// 获取数据库监控运行状态
 #[tauri::command]

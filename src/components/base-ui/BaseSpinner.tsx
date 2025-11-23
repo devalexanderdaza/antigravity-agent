@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils.ts';
 import { Loader2 } from 'lucide-react';
 
 export interface BaseSpinnerProps extends React.HTMLAttributes<HTMLDivElement> {

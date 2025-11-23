@@ -22,7 +22,7 @@ use crate::path_utils::AppPaths;
 /// - `Ok((backup_name, is_overwrite))`: 备份文件名和是否为覆盖操作
 /// - `Err(message)`: 错误信息
 pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), String> {
-    log::info!("🔧 执行智能备份（完整 Marker 模式），邮箱: {}", email);
+    tracing::info!("🔧 执行智能备份（完整 Marker 模式），邮箱: {}", email);
 
     let config_dir = AppPaths::backup_dir().ok_or("无法获取备份目录")?;
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;

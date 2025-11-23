@@ -1,6 +1,6 @@
 import React from 'react';
 import * as Switch from '@radix-ui/react-switch';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils.ts';
 
 export interface BaseSwitchProps {
   checked: boolean;

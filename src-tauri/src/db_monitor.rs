@@ -1,12 +1,12 @@
 //! 数据库监控模块 - 简化版本：newData, oldData, diff
 
+use serde::Serialize;
+use serde_json::Value;
 use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
-use serde_json::Value;
-use serde::Serialize;
-use tauri::{AppHandle, Manager, Emitter};
-use log::{info, warn, error};
+use tracing::{error, info, warn};
 
 // 数据差异结构
 #[derive(Debug, Clone, Serialize)]
