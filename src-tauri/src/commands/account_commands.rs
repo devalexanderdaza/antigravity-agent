@@ -113,23 +113,76 @@ pub async fn get_current_antigravity_info() -> Result<Value, String> {
 
 /// 备份当前 Antigravity 账户
 #[tauri::command]
-pub async fn backup_antigravity_current_account(
-    email: String, // 参数名改为 email，直接接收邮箱
-) -> Result<String, String> {
+pub async fn backup_antigravity_current_account() -> Result<String, String> {
     crate::log_async_command!("backup_antigravity_current_account", async {
-        log::info!("📥 开始备份账户: {}", email);
+        log::info!("📥 开始备份当前账户");
 
-        // 直接调用智能备份函数，让它处理去重逻辑和文件名生成
-        match crate::antigravity_backup::smart_backup_antigravity_account(&email) {
-            Ok((backup_name, is_overwrite)) => {
-                let action = if is_overwrite { "更新" } else { "备份" };
-                let message = format!("Antigravity 账户 '{}'{}成功", backup_name, action);
-                log::info!("✅ {}", message);
-                Ok(message)
+        // 尝试获取 Antigravity 状态数据库路径
+        let app_data = match crate::platform_utils::get_antigravity_db_path() {
+            Some(path) => path,
+            None => {
+                // 如果主路径不存在，尝试其他可能的位置
+                let possible_paths = crate::platform_utils::get_all_antigravity_db_paths();
+                if possible_paths.is_empty() {
+                    return Err("未找到Antigravity安装位置".to_string());
+                }
+                possible_paths[0].clone()
+            }
+        };
+
+        if !app_data.exists() {
+            return Err(format!(
+                "Antigravity 状态数据库文件不存在: {}",
+                app_data.display()
+            ));
+        }
+
+        // 连接到 SQLite 数据库并获取认证信息
+        let conn = crate::Connection::open(&app_data)
+            .map_err(|e| format!("连接数据库失败 ({}): {}", app_data.display(), e))?;
+
+        let auth_result: SqlResult<String> = conn.query_row(
+            "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus'",
+            [],
+            |row| row.get(0),
+        );
+
+        match auth_result {
+            Ok(auth_json) => {
+                // 解析 JSON 字符串
+                match serde_json::from_str::<Value>(&auth_json) {
+                    Ok(auth_data) => {
+                        // 尝试获取邮箱
+                        if let Some(email) = auth_data.get("email").and_then(|v| v.as_str()) {
+                            log::info!("📧 检测到当前用户: {}", email);
+
+                            // 调用智能备份函数，让它处理去重逻辑和文件名生成
+                            match crate::antigravity_backup::smart_backup_antigravity_account(email) {
+                                Ok((backup_name, is_overwrite)) => {
+                                    let action = if is_overwrite { "更新" } else { "备份" };
+                                    let message = format!("Antigravity 账户 '{}'{}成功", backup_name, action);
+                                    log::info!("✅ {}", message);
+                                    Ok(message)
+                                }
+                                Err(e) => {
+                                    log::error!("❌ 智能备份失败: {}", e);
+                                    Err(e)
+                                }
+                            }
+                        } else {
+                            log::warn!("⚠️ 认证信息中未找到邮箱字段");
+                            Err("未检测到已登录用户".to_string())
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("❌ 解析认证信息失败: {}", e);
+                        Err("解析认证信息失败".to_string())
+                    }
+                }
             }
             Err(e) => {
-                log::error!("❌ 智能备份失败: {}", e);
-                Err(e)
+                log::warn!("⚠️ 查询认证信息失败: {}", e);
+                Err("未检测到已登录用户".to_string())
             }
         }
     })

@@ -5,10 +5,8 @@ import BusinessConfirmDialog from './business/ConfirmDialog';
 import BusinessActionButton from './business/ActionButton';
 import { TooltipProvider } from './ui/tooltip';
 import ToolbarTitle from './ui/toolbar-title';
-import SystemTraySwitch from './ui/system-tray-switch';
 import { SilentLogExport } from './SilentLogExport';
 import { useUpdateChecker } from '../hooks/useUpdateChecker';
-import { useSystemTray } from '../hooks/useSystemTray';
 
 interface LoadingState {
   isProcessLoading: boolean;
@@ -50,30 +48,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
   showStatus,
   onSettingsClick
 }) => {
-  // 使用系统托盘 Hook 管理所有托盘相关逻辑
-  const {
-    enabled: trayEnabled,
-    isLoading: isTrayLoading,
-    error: trayError,
-    toggle: toggleTray
-  } = useSystemTray({
-    onStatusChange: (enabled, message) => {
-      if (message && message !== '状态一致，无需同步') {
-        showStatus(message, trayError !== null);
-      }
-    }
-  });
-
-  // 处理系统托盘开关变化 - 直接调用 hook 的 toggle 函数
-  // 后端会自动处理所有逻辑，前端只需要调用
-  const handleTrayToggle = async () => {
-    try {
-      // 新的简化接口：直接调用 toggle，不需要传递参数
-      await toggleTray();
-    } catch (error) {
-      showStatus('切换系统托盘状态失败', true);
-    }
-  };
 
   // 确认对话框状态（用于"登录新账户"操作）
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -244,14 +218,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   </svg>
                 </button>
               )}
-
-              {/* 系统托盘开关 - 最右侧 */}
-              <SystemTraySwitch
-                checked={trayEnabled}
-                onCheckedChange={handleTrayToggle}
-                disabled={isAnyLoading}
-                showStatus={showStatus}
-              />
             </div>
           </div>
         </div>

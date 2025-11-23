@@ -36,8 +36,21 @@ function App() {
   // ========== Hook 集成 ==========
   useDevToolsShortcut();
 
+  // 状态提示
+  const showStatus = useCallback((message: string, isError: boolean = false): void => {
+    setStatus({ message, isError });
+    setTimeout(() => setStatus({ message: '', isError: false }), 5000);
+  }, []);
+
+  // 密码对话框
+  const { passwordDialog, showPasswordDialog, closePasswordDialog, handlePasswordDialogCancel } = usePasswordDialog(showStatus);
+
+  // 备份管理
+  const { backups, isRefreshing, refreshBackupList, handleRefresh } = useBackupManagement(showStatus);
+
   // 自动数据库监听（需要根据设置状态启动）
-  useAutoDatabaseListener();
+  const databaseRefreshCallback = useCallback(() => refreshBackupList(true), [refreshBackupList]);
+  useAutoDatabaseListener(databaseRefreshCallback);
 
   // 加载并同步数据库监控设置
   const { setAutoRefreshEnabled } = useDatabaseStore();
@@ -58,18 +71,6 @@ function App() {
 
     loadSettings();
   }, [setAutoRefreshEnabled]);
-
-  // 状态提示
-  const showStatus = useCallback((message: string, isError: boolean = false): void => {
-    setStatus({ message, isError });
-    setTimeout(() => setStatus({ message: '', isError: false }), 5000);
-  }, []);
-
-  // 密码对话框
-  const { passwordDialog, showPasswordDialog, closePasswordDialog, handlePasswordDialogCancel } = usePasswordDialog(showStatus);
-
-  // 备份管理
-  const { backups, isRefreshing, refreshBackupList, handleRefresh } = useBackupManagement(showStatus);
 
   // 配置管理
   const { configLoadingState, hasUserData, isCheckingData, importConfig, exportConfig } = useConfigManager(

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useDatabaseStore } from '../stores/databaseStore';
@@ -8,31 +8,45 @@ import { useAppActions } from './useAppActions';
  * 数据库监听 Hook
  * 自动监听后端推送的数据库变化事件，并触发相应的界面更新
  */
-export const useDatabaseListener = () => {
+export const useDatabaseListener = (refreshBackupList?: () => Promise<void>) => {
   const {
     setListening,
-    setLastError,
-    updateLastUpdateTime,
-    incrementUpdateCount,
     setUnlistenFn,
     cleanup,
   } = useDatabaseStore();
 
-  const { refreshBackupList } = useAppActions();
+  // 使用 useMemo 来稳定 actualRefreshBackupList 的引用
+  const appActions = useAppActions();
+  const actualRefreshBackupList = useMemo(() => {
+    return refreshBackupList || appActions.refreshBackupList;
+  }, [refreshBackupList, appActions.refreshBackupList]);
 
   // 处理数据库变化事件
-  const handleDatabaseChange = useCallback(async (...args) => {
-    try {
-      console.log('📡 接收到数据库变化事件', args);
+  const handleDatabaseChange = useCallback(async (event: any) => {
+    console.log('📡 接收到数据库变化事件', event);
 
+    // 解析事件数据：newData, oldData, diff
+    const { newData, oldData, diff } = event.payload;
 
-      console.log('✅ 数据库变化处理完成');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('❌ 处理数据库变化失败:', errorMessage);
-      setLastError(`更新失败: ${errorMessage}`);
+    if (diff) {
+      console.log('📊 变化摘要:', {
+        hasChanges: diff.hasChanges,
+        changedFields: diff.changedFields,
+        summary: diff.summary
+      });
     }
-  }, [refreshBackupList, updateLastUpdateTime, incrementUpdateCount, setLastError]);
+
+    // 触发界面更新（不管有没有变化）
+    console.log('🔄 数据库变化事件，触发界面更新');
+
+    // 延迟确保数据库操作完成
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // 重新加载备份列表（类似点击刷新的效果）
+    await actualRefreshBackupList();
+
+    console.log('✅ 数据库变化处理完成 - 界面已更新');
+  }, [actualRefreshBackupList]);
 
   // 启动数据库监听
   const startListening = useCallback(async () => {
@@ -52,10 +66,9 @@ export const useDatabaseListener = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('❌ 启动数据库监听失败:', errorMessage);
-      setLastError(`启动失败: ${errorMessage}`);
       setListening(false);
     }
-  }, [handleDatabaseChange, setListening, setLastError, setUnlistenFn, cleanup]);
+  }, [handleDatabaseChange, setListening, setUnlistenFn, cleanup]);
 
   // 停止数据库监听
   const stopListening = useCallback(async () => {
@@ -69,9 +82,8 @@ export const useDatabaseListener = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('❌ 停止数据库监听失败:', errorMessage);
-      setLastError(`停止失败: ${errorMessage}`);
     }
-  }, [cleanup, setListening, setLastError]);
+  }, [cleanup, setListening]);
 
   // 重启监听（当设置改变时）
   const restartListening = useCallback(async () => {
@@ -84,7 +96,6 @@ export const useDatabaseListener = () => {
     stopListening,
     restartListening,
     isListening: useDatabaseStore(state => state.isListening),
-    lastError: useDatabaseStore(state => state.lastError),
   };
 };
 
@@ -92,8 +103,8 @@ export const useDatabaseListener = () => {
  * 自动数据库监听 Hook
  * 根据设置自动启动/停止数据库监听，并处理组件生命周期
  */
-export const useAutoDatabaseListener = () => {
-  const { startListening, stopListening } = useDatabaseListener();
+export const useAutoDatabaseListener = (refreshBackupList?: () => Promise<void>) => {
+  const { startListening, stopListening } = useDatabaseListener(refreshBackupList);
   const isAutoRefreshEnabled = useDatabaseStore(state => state.isAutoRefreshEnabled);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -128,7 +139,7 @@ export const useAutoDatabaseListener = () => {
     return () => {
       stopListening();
     };
-  }, [isAutoRefreshEnabled, startListening, stopListening, isInitialized]);
+  }, [isAutoRefreshEnabled, isInitialized]);
 
   // 页面可见性变化时的处理
   useEffect(() => {

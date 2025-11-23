@@ -23,7 +23,7 @@ export interface BusinessActionButtonProps {
  * 操作按钮业务组件
  * 直接使用 BaseButton + BaseTooltip，专注于业务逻辑处理
  */
-const BusinessActionButton: React.FC<BusinessActionButtonProps> = ({
+const BusinessActionButton = React.forwardRef<HTMLButtonElement, BusinessActionButtonProps>(({
   onClick,
   children,
   isLoading = false,
@@ -35,7 +35,7 @@ const BusinessActionButton: React.FC<BusinessActionButtonProps> = ({
   loadingText,
   className = '',
   isAnyLoading = false,
-}) => {
+}, ref) => {
   // 计算最终的禁用状态
   const isDisabled = disabled || isLoading || isAnyLoading;
 
@@ -44,6 +44,7 @@ const BusinessActionButton: React.FC<BusinessActionButtonProps> = ({
 
   const buttonContent = (
     <BaseButton
+      ref={ref}
       onClick={onClick}
       variant={buttonVariant}
       size={size}
@@ -67,6 +68,8 @@ const BusinessActionButton: React.FC<BusinessActionButtonProps> = ({
   }
 
   return buttonContent;
-};
+});
+
+BusinessActionButton.displayName = 'BusinessActionButton';
 
 export default BusinessActionButton;
