@@ -1,14 +1,22 @@
-//! 数据库自动监控模块
-//! 负责定时检查 Antigravity 数据库变化并推送事件到前端
+//! 数据库监控模块 - 简化版本：newData, oldData, diff
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 use serde_json::Value;
+use serde::Serialize;
 use tauri::{AppHandle, Manager, Emitter};
 use log::{info, warn, error};
 
-/// 数据库监控器
+// 数据差异结构
+#[derive(Debug, Clone, Serialize)]
+pub struct DataDiff {
+    pub has_changes: bool,
+    pub changed_fields: Vec<String>,
+    pub summary: String,
+}
+
+// 数据库监控器
 pub struct DatabaseMonitor {
     app_handle: AppHandle,
     last_data: Arc<Mutex<Option<Value>>>,
@@ -27,7 +35,7 @@ impl DatabaseMonitor {
 
     /// 启动数据库监控
     pub async fn start_monitoring(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("🔧 启动数据库自动监控");
+        info!("🔧 启动数据库自动监控（简化版）");
 
         let last_data = self.last_data.clone();
         let is_running = self.is_running.clone();
@@ -37,7 +45,7 @@ impl DatabaseMonitor {
         *is_running.lock().await = true;
 
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(5));
+            let mut interval = interval(Duration::from_secs(3)); // 3秒间隔，更敏感
 
             loop {
                 interval.tick().await;
@@ -58,18 +66,28 @@ impl DatabaseMonitor {
                     continue;
                 }
 
-                // 获取当前数据
-                match Self::get_current_data().await {
-                    Ok(current_data) => {
+                // 获取当前完整数据
+                match Self::get_complete_data().await {
+                    Ok(new_data) => {
                         let mut last = last_data.lock().await;
 
                         // 检查是否有数据变化
                         if let Some(ref old_data) = *last {
-                            if old_data != &current_data {
-                                info!("📢 检测到数据库变化，推送事件到前端");
+                            // 分析差异
+                            let diff = Self::analyze_diff(old_data, &new_data);
+
+                            if diff.has_changes {
+                                info!("📢 检测到数据库变化: {}", diff.summary);
+
+                                // 构建简化的事件数据：newData, oldData, diff
+                                let event_data = serde_json::json!({
+                                    "newData": new_data,
+                                    "oldData": old_data,
+                                    "diff": diff
+                                });
 
                                 // 推送事件到前端
-                                if let Err(e) = app_handle.emit("database-changed", ()) {
+                                if let Err(e) = app_handle.emit("database-changed", &event_data) {
                                     error!("❌ 推送数据库变化事件失败: {}", e);
                                 } else {
                                     info!("✅ 数据库变化事件推送成功");
@@ -77,10 +95,10 @@ impl DatabaseMonitor {
                             }
                         }
 
-                        *last = Some(current_data);
+                        *last = Some(new_data);
                     }
                     Err(e) => {
-                        warn!("⚠️ 获取当前数据库数据失败: {}", e);
+                        warn!("⚠️ 获取完整数据失败: {}", e);
                     }
                 }
             }
@@ -95,11 +113,8 @@ impl DatabaseMonitor {
         *self.is_running.lock().await = false;
     }
 
-    /// 获取当前数据库数据（真实实现）
-    async fn get_current_data() -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        // 这里我们复用现有的获取当前用户信息的逻辑
-        // 直接调用后端命令来获取数据
-
+    /// 获取完整数据库数据
+    async fn get_complete_data() -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         // 检测数据库路径
         let db_path = if cfg!(windows) {
             dirs::home_dir()
@@ -119,35 +134,86 @@ impl DatabaseMonitor {
                 .join("state.vscdb")
         };
 
-        if !db_path.exists() {
-            // 数据库不存在，返回空数据
-            return Ok(serde_json::json!({
-                "user": null,
-                "timestamp": chrono::Utc::now().timestamp()
-            }));
+        let mut complete_data = serde_json::Map::new();
+
+        if db_path.exists() {
+            let conn = rusqlite::Connection::open(&db_path)?;
+            
+            // 查询所有数据（完整的ItemTable）
+            let mut stmt = conn.prepare("SELECT key, value FROM ItemTable ORDER BY key")?;
+            
+            let rows: Vec<(String, String)> = stmt.query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?.collect::<Result<Vec<_>, _>>()?;
+
+            // 构建完整数据对象
+            for (key, value) in rows {
+                // 尝试解析为JSON，如果失败则保持原始字符串
+                let json_value: Value = match serde_json::from_str(&value) {
+                    Ok(parsed) => parsed,
+                    Err(_) => Value::String(value.clone()),
+                };
+                
+                complete_data.insert(key, json_value);
+            }
         }
 
-        // 读取数据库
-        let conn = rusqlite::Connection::open(&db_path)?;
+        Ok(Value::Object(complete_data))
+    }
 
-        // 查询当前用户数据
-        let mut stmt = conn.prepare(
-            "SELECT value FROM ItemTable WHERE key = 'antigravity.profile'"
-        )?;
+    /// 分析两个数据之间的差异
+    fn analyze_diff(old: &Value, new: &Value) -> DataDiff {
+        let mut changed_fields = Vec::new();
 
-        let user_data: Option<String> = stmt.query_row([], |row| row.get(0)).ok();
+        // 比较数据
+        match (old, new) {
+            (Value::Object(old_obj), Value::Object(new_obj)) => {
+                // 检查新增的字段
+                for key in new_obj.keys() {
+                    match old_obj.get(key) {
+                        Some(old_value) => {
+                            if old_value != new_obj.get(key).unwrap() {
+                                changed_fields.push(format!("{}: changed", key));
+                            }
+                        }
+                        None => {
+                            changed_fields.push(format!("{}: added", key));
+                        }
+                    }
+                }
 
-        // 解析用户数据
-        let user_value = if let Some(data) = user_data {
-            serde_json::from_str(&data).unwrap_or(Value::Null)
+                // 检查删除的字段
+                for key in old_obj.keys() {
+                    if !new_obj.contains_key(key) {
+                        changed_fields.push(format!("{}: removed", key));
+                    }
+                }
+            }
+            (Value::Null, Value::Object(_)) => {
+                changed_fields.push("data: added".to_string());
+            }
+            (Value::Object(_), Value::Null) => {
+                changed_fields.push("data: removed".to_string());
+            }
+            (Value::Null, Value::Null) => {
+                // 都没有数据，无变化
+            }
+            _ => {
+                changed_fields.push("data: structure_changed".to_string());
+            }
+        }
+
+        let has_changes = !changed_fields.is_empty();
+        let summary = if has_changes {
+            format!("{} fields changed", changed_fields.len())
         } else {
-            Value::Null
+            "No changes".to_string()
         };
 
-        Ok(serde_json::json!({
-            "user": user_value,
-            "timestamp": chrono::Utc::now().timestamp()
-        }))
+        DataDiff {
+            has_changes,
+            changed_fields,
+            summary,
+        }
     }
 }
-

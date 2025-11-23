@@ -1,13 +1,11 @@
 import { useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useDatabaseStore } from '../stores/databaseStore';
 
 /**
  * 应用级操作 Hook
  * 提供全局应用操作，如刷新备份列表等
  */
 export const useAppActions = (showStatus?: (message: string, isError?: boolean) => void) => {
-  const { updateLastUpdateTime, incrementUpdateCount, setLastError } = useDatabaseStore();
 
   // 刷新备份列表 - 从 useBackupManagement 提取核心逻辑
   const refreshBackupList = useCallback(async (skipAutoBackup: boolean = false) => {
@@ -34,19 +32,13 @@ export const useAppActions = (showStatus?: (message: string, isError?: boolean) 
       const backups = await invoke<string[]>('list_backups');
       console.log('✅ 备份列表获取完成:', backups);
 
-      // 更新数据库监听状态
-      updateLastUpdateTime();
-      incrementUpdateCount();
-      setLastError(null);
-
       return backups;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('❌ 刷新备份列表失败:', errorMessage);
-      setLastError(`刷新失败: ${errorMessage}`);
       throw error;
     }
-  }, [showStatus, updateLastUpdateTime, incrementUpdateCount, setLastError]);
+  }, [showStatus]);
 
   // 手动刷新（用户点击刷新按钮）
   const handleRefresh = useCallback(async () => {

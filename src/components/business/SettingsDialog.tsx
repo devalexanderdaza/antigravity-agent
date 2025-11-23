@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, FolderOpen, FileCode, Shield, Database, Zap, Monitor, Check, AlertCircle, Info } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { AntigravityPathService } from '../../services/antigravity-path-service';
@@ -11,6 +11,7 @@ import {
 } from '@/components/base-ui/BaseDialog';
 import { BaseButton } from '@/components/base-ui/BaseButton';
 import { BaseSpinner } from '@/components/base-ui/BaseSpinner';
+import { SystemTrayService } from '../../services/system-tray-service';
 
 interface BusinessSettingsDialogProps {
   isOpen: boolean;
@@ -23,22 +24,23 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
 }) => {
   const [dataPath, setDataPath] = useState<string>('');
   const [execPath, setExecPath] = useState<string>('');
-  const [newDataPath, setNewDataPath] = useState<string>('');
-  const [newExecPath, setNewExecPath] = useState<string>('');
-  const [isDataPathValid, setIsDataPathValid] = useState(false);
-  const [isExecPathValid, setIsExecPathValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string>('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
 
   // 监控设置状态
   const [isDbMonitoringEnabled, setIsDbMonitoringEnabled] = useState(true);
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
 
+  // 系统托盘状态
+  const [isSystemTrayEnabled, setIsSystemTrayEnabled] = useState(true);
+  const [isTrayLoading, setIsTrayLoading] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       loadCurrentPaths();
       loadCurrentSettings();
+      loadSystemTraySettings();
     }
   }, [isOpen]);
 
@@ -68,8 +70,6 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
 
       setDataPath(finalDataPath || '未设置');
       setExecPath(finalExecPath || '未设置');
-      setNewDataPath('');
-      setNewExecPath('');
     } catch (error) {
       console.error('加载路径失败:', error);
       setDataPath('加载失败');
@@ -98,10 +98,40 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
     try {
       const result = await invoke<string>('save_db_monitoring_state', { enabled });
       setIsDbMonitoringEnabled(enabled);
-      setMessage(`✅ ${result}`);
-      setTimeout(() => setMessage(''), 2000);
+      setMessage(`${result}`);
+      setMessageType('success');
+      setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      setMessage(`❌ 设置失败: ${error}`);
+      setMessage(`设置失败: ${error}`);
+      setMessageType('error');
+    }
+  };
+
+  const loadSystemTraySettings = async () => {
+    try {
+      // 加载系统托盘状态
+      const trayEnabled = await SystemTrayService.getSystemTrayState();
+      setIsSystemTrayEnabled(trayEnabled);
+    } catch (error) {
+      console.error('加载系统托盘设置失败:', error);
+      // 使用默认值
+      setIsSystemTrayEnabled(false);
+    }
+  };
+
+  const handleSystemTrayToggle = async () => {
+    setIsTrayLoading(true);
+    try {
+      const result = await SystemTrayService.toggleSystemTray();
+      setIsSystemTrayEnabled(result.enabled);
+      setMessage(result.message);
+      setMessageType(result.enabled ? 'success' : 'info');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage(`系统托盘切换失败: ${error}`);
+      setMessageType('error');
+    } finally {
+      setIsTrayLoading(false);
     }
   };
 
@@ -114,17 +144,23 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       });
 
       if (result && typeof result === 'string') {
-        setNewDataPath(result);
         const valid = await AntigravityPathService.validatePath(result);
-        setIsDataPathValid(valid);
-        if (!valid) {
-          setMessage('⚠️ 无效的数据目录：未找到 state.vscdb 文件');
+
+        if (valid) {
+          // 立即保存有效路径
+          await AntigravityPathService.savePath(result);
+          setDataPath(result);
+          setMessage('数据库路径已更新');
+          setMessageType('success');
+          setTimeout(() => setMessage(''), 2000);
         } else {
-          setMessage('');
+          setMessage('无效的数据目录：未找到 state.vscdb 文件');
+          setMessageType('warning');
         }
       }
     } catch (error) {
       setMessage(`选择失败: ${error}`);
+      setMessageType('error');
     }
   };
 
@@ -141,198 +177,245 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       });
 
       if (result && typeof result === 'string') {
-        setNewExecPath(result);
         const valid = await AntigravityPathService.validateExecutable(result);
-        setIsExecPathValid(valid);
-        if (!valid) {
-          setMessage('⚠️ 无效的可执行文件');
+
+        if (valid) {
+          // 立即保存有效路径
+          await AntigravityPathService.saveExecutable(result);
+          setExecPath(result);
+          setMessage('可执行文件路径已更新');
+          setMessageType('success');
+          setTimeout(() => setMessage(''), 2000);
         } else {
-          setMessage('');
+          setMessage('无效的可执行文件');
+          setMessageType('warning');
         }
       }
     } catch (error) {
       setMessage(`选择失败: ${error}`);
-    }
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setMessage('');
-
-    try {
-      // 保存数据路径
-      if (newDataPath && isDataPathValid) {
-        await AntigravityPathService.savePath(newDataPath);
-        setDataPath(newDataPath);
-      }
-
-      // 保存可执行文件路径
-      if (newExecPath && isExecPathValid) {
-        await AntigravityPathService.saveExecutable(newExecPath);
-        setExecPath(newExecPath);
-      }
-
-      setMessage('✅ 设置已保存');
-      setTimeout(() => {
-        onOpenChange(false);
-      }, 1000);
-    } catch (error) {
-      setMessage(`❌ 保存失败: ${error}`);
-    } finally {
-      setIsSaving(false);
+      setMessageType('error');
     }
   };
 
   const handleClose = () => {
     // 重置状态
-    setNewDataPath('');
-    setNewExecPath('');
     setMessage('');
     onOpenChange(false);
   };
 
-  const hasChanges = (newDataPath && isDataPathValid) || (newExecPath && isExecPathValid);
+  const getMessageIcon = () => {
+    switch (messageType) {
+      case 'success':
+        return <Check className="h-4 w-4" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4" />;
+      case 'warning':
+        return <AlertCircle className="h-4 w-4" />;
+      case 'info':
+      default:
+        return <Info className="h-4 w-4" />;
+    }
+  };
+
+  const getMessageColorClasses = () => {
+    switch (messageType) {
+      case 'success':
+        return 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200';
+      case 'error':
+        return 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200';
+      case 'warning':
+        return 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200';
+      case 'info':
+      default:
+        return 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200';
+    }
+  };
 
   return (
     <BaseDialog open={isOpen} onOpenChange={onOpenChange}>
-      <BaseDialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <BaseDialogHeader>
-          <BaseDialogTitle>
+      <BaseDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+        <BaseDialogHeader className="px-6 pt-6 pb-2">
+          <BaseDialogTitle className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Settings className="h-5 w-5 text-antigravity-blue" />
             设置
           </BaseDialogTitle>
         </BaseDialogHeader>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-col items-center justify-center py-16">
             <BaseSpinner size="lg" />
+            <p className="text-gray-500 dark:text-gray-400 mt-4 text-sm">正在加载设置...</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* 数据库路径 */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                数据库路径
-              </h3>
-              <div className="text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded-lg break-all text-gray-700 dark:text-gray-300">
-                {dataPath}
-              </div>
-              <BaseButton
-                variant="outline"
-                onClick={handleBrowseDataPath}
-                disabled={isSaving}
-                className="w-full"
-              >
-                修改数据库路径
-              </BaseButton>
-              {newDataPath && (
-                <div className="mt-2 text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
-                  <div className="text-gray-600 dark:text-gray-400 mb-1">新路径：</div>
-                  <div className="break-all text-gray-800 dark:text-gray-200">{newDataPath}</div>
-                  {isDataPathValid && (
-                    <div className="text-green-600 dark:text-green-400 mt-1">✅ 有效</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 数据库监控设置 */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                数据库监控
-              </h3>
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-white">
-                      启用自动监控
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      实时监控 Antigravity 数据库变化，自动记录用户信息
-                    </div>
-                  </div>
-                  <div className="relative">
-                    {isSettingsLoading ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-500"></div>
-                    ) : (
-                      <button
-                        onClick={() => handleDbMonitoringToggle(!isDbMonitoringEnabled)}
-                        disabled={isSettingsLoading}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-antigravity-blue focus:ring-offset-2 ${
-                          isDbMonitoringEnabled ? 'bg-antigravity-blue' : 'bg-gray-200 dark:bg-gray-600'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            isDbMonitoringEnabled ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">
-                  {isDbMonitoringEnabled ? (
-                    <span className="text-green-600 dark:text-green-400">🟢 监控已启用，将自动检测数据库变化</span>
-                  ) : (
-                    <span className="text-gray-500 dark:text-gray-400">🔴 监控已禁用，需要手动刷新获取用户信息</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* 可执行文件路径 */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                可执行文件路径
-              </h3>
-              <div className="text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded-lg break-all text-gray-700 dark:text-gray-300">
-                {execPath}
-              </div>
-              <BaseButton
-                variant="outline"
-                onClick={handleBrowseExecPath}
-                disabled={isSaving}
-                className="w-full"
-              >
-                修改可执行文件路径
-              </BaseButton>
-              {newExecPath && (
-                <div className="mt-2 text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
-                  <div className="text-gray-600 dark:text-gray-400 mb-1">新路径：</div>
-                  <div className="break-all text-gray-800 dark:text-gray-200">{newExecPath}</div>
-                  {isExecPathValid && (
-                    <div className="text-green-600 dark:text-green-400 mt-1">✅ 有效</div>
-                  )}
-                </div>
-              )}
-            </div>
-
+          <div className="px-6 pb-6 space-y-5">
+            {/* 消息提示区域 */}
             {message && (
-              <div className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <p className="text-sm text-gray-800 dark:text-gray-200">{message}</p>
+              <div className={`flex items-center gap-3 p-3 rounded-lg border transition-all duration-300 ${getMessageColorClasses()}`}>
+                {getMessageIcon()}
+                <p className="font-medium text-sm">{message}</p>
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
-              <BaseButton
-                variant="outline"
-                onClick={handleClose}
-                disabled={isSaving}
-                className="flex-1"
-              >
-                关闭
-              </BaseButton>
-              <BaseButton
-                variant="default"
-                onClick={handleSave}
-                disabled={!hasChanges || isSaving}
-                isLoading={isSaving}
-                loadingText="保存中..."
-                className="flex-1"
-              >
-                保存
-              </BaseButton>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* 数据库路径设置卡片 */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <Database className="h-5 w-5 text-antigravity-blue dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">数据库路径</h3>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">当前路径</div>
+                    <div className="text-xs font-mono text-gray-800 dark:text-gray-200 break-all">
+                      {dataPath}
+                    </div>
+                  </div>
+
+                  <BaseButton
+                    variant="outline"
+                    onClick={handleBrowseDataPath}
+                    className="w-full justify-center gap-2 h-9"
+                    leftIcon={<FolderOpen className="h-4 w-4" />}
+                  >
+                    选择数据库路径
+                  </BaseButton>
+                </div>
+              </div>
+
+              {/* 可执行文件路径设置卡片 */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <FileCode className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">可执行文件</h3>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">当前路径</div>
+                    <div className="text-xs font-mono text-gray-800 dark:text-gray-200 break-all">
+                      {execPath}
+                    </div>
+                  </div>
+
+                  <BaseButton
+                    variant="outline"
+                    onClick={handleBrowseExecPath}
+                    className="w-full justify-center gap-2 h-9"
+                    leftIcon={<FileCode className="h-4 w-4" />}
+                  >
+                    选择可执行文件
+                  </BaseButton>
+                </div>
+              </div>
+            </div>
+
+            {/* 数据库监控设置 - 全宽卡片 */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">智能监控</h3>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">自动监控数据库变化</span>
+                  {isDbMonitoringEnabled ? (
+                    <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-25"></div>
+                        <div className="relative w-1.5 h-1.5 bg-green-600 dark:bg-green-400 rounded-full"></div>
+                      </div>
+                      <span className="text-xs font-medium">已启用</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                      <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
+                      <span className="text-xs font-medium">已禁用</span>
+                    </div>
+                  )}
+                </div>
+
+                {isSettingsLoading ? (
+                  <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded">
+                    <div className="animate-spin rounded-full h-3 w-3 border border-gray-300 border-t-antigravity-blue"></div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleDbMonitoringToggle(!isDbMonitoringEnabled)}
+                    disabled={isSettingsLoading}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-antigravity-blue focus:ring-offset-2 ${
+                      isDbMonitoringEnabled ? 'bg-antigravity-blue shadow-lg shadow-antigravity-blue/30' : 'bg-gray-200 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition-all duration-300 ${
+                        isDbMonitoringEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 系统托盘设置 - 全宽卡片 */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                  <Monitor className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">系统托盘</h3>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">最小化到托盘</span>
+                  {isSystemTrayEnabled ? (
+                    <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-25"></div>
+                        <div className="relative w-1.5 h-1.5 bg-amber-600 dark:bg-amber-400 rounded-full"></div>
+                      </div>
+                      <span className="text-xs font-medium">已启用</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                      <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
+                      <span className="text-xs font-medium">已禁用</span>
+                    </div>
+                  )}
+                </div>
+
+                {isTrayLoading ? (
+                  <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded">
+                    <div className="animate-spin rounded-full h-3 w-3 border border-gray-300 border-t-amber-600"></div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSystemTrayToggle}
+                    disabled={isTrayLoading}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+                      isSystemTrayEnabled ? 'bg-amber-600 shadow-lg shadow-amber-600/30' : 'bg-gray-200 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition-all duration-300 ${
+                        isSystemTrayEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
