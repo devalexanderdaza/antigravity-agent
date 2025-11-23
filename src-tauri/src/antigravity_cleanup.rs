@@ -86,7 +86,7 @@ fn clear_database(db_path: &Path, db_name: &str) -> Result<usize, String> {
 }
 
 pub async fn clear_all_antigravity_data() -> Result<String, String> {
-    println!("🗑️ 开始清除 Antigravity 用户认证数据");
+    println!("🗑️ 开始清除 Antigravity 用户认证数据（保留设备指纹）");
 
     let app_data = match platform_utils::get_antigravity_db_path() {
         Some(p) => p,
@@ -129,6 +129,10 @@ pub async fn clear_all_antigravity_data() -> Result<String, String> {
     } else {
         println!("  ℹ️ 备份数据库不存在，跳过");
     }
+
+    // 添加设备指纹保护说明
+    println!("🔒 设备指纹保护: google.antigravity 已保留，避免风控触发");
+    msg.push_str(" (设备指纹已保留)");
 
     Ok(format!("✅ 登出成功: {}", msg))
 }

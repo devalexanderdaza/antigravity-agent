@@ -30,7 +30,7 @@ pub mod database {
     /// 目标存储标记
     pub const TARGET_STORAGE_MARKER: &str = "__$__targetStorageMarker";
 
-    /// 所有需要备份的字段列表
+    /// 所有需要备份的字段列表（包含设备指纹）
     pub const ALL_KEYS: &[&str] = &[
         AUTH_STATUS,
         PROFILE_URL,
@@ -43,13 +43,12 @@ pub mod database {
         NEW_STORAGE_MARKER,
     ];
 
-    /// 需要清除的字段列表（不包含会话数据）
+    /// 需要清除的字段列表（不包含会话数据和设备指纹）
     pub const DELETE_KEYS: &[&str] = &[
         AUTH_STATUS,
         PROFILE_URL,
         USER_SETTINGS,
         ONBOARDING,
-        GOOGLE_DATA,
         COMMAND_CONFIGS,
     ];
 }

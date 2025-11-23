@@ -63,6 +63,41 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
         }
     }
 
+    // 1.5. 提取所有通知相关字段（避免历史通知重复弹窗）
+    println!("  🔔 检查通知相关字段...");
+    let notification_keys: Vec<String> = conn
+        .prepare("SELECT key FROM ItemTable WHERE key LIKE 'antigravity.notification.%'")
+        .map_err(|e| e.to_string())?
+        .query_map([], |row| row.get(0))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    if !notification_keys.is_empty() {
+        println!("  📬 发现 {} 个通知字段，开始备份...", notification_keys.len());
+        for notification_key in &notification_keys {
+            let val: Option<String> = conn
+                .query_row("SELECT value FROM ItemTable WHERE key = ?", [notification_key], |row| {
+                    row.get(0)
+                })
+                .optional()
+                .unwrap_or(None);
+
+            if let Some(v) = val {
+                println!("  📦 备份通知: {}", notification_key);
+                data_map.insert(notification_key.clone(), Value::String(v));
+            }
+        }
+
+        // 保存通知字段列表到元数据中，方便恢复时使用
+        data_map.insert(
+            "notification_keys".to_string(),
+            Value::Array(notification_keys.into_iter().map(Value::String).collect()),
+        );
+    } else {
+        println!("  ℹ️ 未发现通知字段");
+    }
+
     // 2. 提取并解析 Marker（作为恢复时的参考书）
     let marker_json: Option<String> = conn
         .query_row(
