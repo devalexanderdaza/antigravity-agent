@@ -1,149 +1,198 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useDevToolsShortcut } from './hooks/useDevToolsShortcut';
+import { usePasswordDialog } from './hooks/use-password-dialog';
 import { useBackupManagement } from './hooks/use-backup-management';
-import { useAppInitialization } from './hooks/use-app-initialization';
-import { useStatusNotification } from './hooks/use-status-notification';
+import { useConfigManager } from './hooks/use-config-manager';
+import { useAntigravityProcess } from './hooks/use-antigravity-process';
 import ManageSection from './components/ManageSection';
 import StatusNotification from './components/StatusNotification';
 import Toolbar from './components/Toolbar';
 import AntigravityPathDialog from './components/AntigravityPathDialog';
 import SettingsDialog from './components/SettingsDialog';
+import PasswordDialog from './components/PasswordDialog';
 import { TooltipProvider } from './components/ui/tooltip';
+import { AntigravityPathService } from './services/antigravity-path-service';
+import { exit } from '@tauri-apps/plugin-process';
 
-interface LoadingState {
-  isProcessLoading: boolean;
-  isImporting: boolean;
-  isExporting: boolean;
-}
-
-interface PasswordDialogState {
-  isOpen: boolean;
-  title: string;
-  description?: string;
-  requireConfirmation?: boolean;
-  validatePassword?: (password: string) => { isValid: boolean; message?: string };
-  onSubmit: (password: string) => void;
+interface Status {
+  message: string;
+  isError: boolean;
 }
 
 /**
- * 主应用组件
- * 负责组合各个 Hooks 并渲染 UI
+ * 统一应用组件
+ * 整合启动流程和业务逻辑，消除重复代码
  */
 function App() {
-  // 启用开发者工具快捷键 (Shift+Ctrl+I)
+  // ========== 应用状态 ==========
+  const [status, setStatus] = useState<Status>({ message: '', isError: false });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(true);
+  const [isPathDialogOpen, setIsPathDialogOpen] = useState(false);
+
+  // ========== Hook 集成 ==========
   useDevToolsShortcut();
 
-  // 状态通知 Hook
-  const { status, showStatus } = useStatusNotification(5000);
+  // 状态提示
+  const showStatus = useCallback((message: string, isError: boolean = false): void => {
+    setStatus({ message, isError });
+    setTimeout(() => setStatus({ message: '', isError: false }), 5000);
+  }, []);
 
-  // 备份管理 Hook
-  const {
-    backups,
-    isRefreshing,
-    refreshBackupList,
-    handleRefresh
-  } = useBackupManagement(showStatus);
+  // 密码对话框
+  const { passwordDialog, showPasswordDialog, closePasswordDialog, handlePasswordDialogCancel } = usePasswordDialog(showStatus);
 
-  // 应用初始化 Hook
-  const {
-    isDetecting,
-    isPathDialogOpen,
-    handlePathSelected,
-    handlePathDialogCancel
-  } = useAppInitialization(refreshBackupList);
+  // 备份管理
+  const { backups, isRefreshing, refreshBackupList, handleRefresh } = useBackupManagement(showStatus);
 
-  // 加载状态
-  const [loadingState, setLoadingState] = useState<LoadingState>({
-    isProcessLoading: false,
-    isImporting: false,
-    isExporting: false
-  });
+  // 配置管理
+  const { configLoadingState, hasUserData, isCheckingData, importConfig, exportConfig } = useConfigManager(
+    showStatus,
+    showPasswordDialog,
+    closePasswordDialog,
+    handleRefresh,
+    isRefreshing
+  );
 
-  // 密码对话框状态
-  const [passwordDialog, setPasswordDialog] = useState<PasswordDialogState>({
-    isOpen: false,
-    title: '',
-    onSubmit: () => {}
-  });
+  // 进程管理
+  const { isProcessLoading, backupAndRestartAntigravity } = useAntigravityProcess(showStatus, handleRefresh);
 
-  // 设置对话框状态
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // ========== 初始化启动流程 ==========
+  const initializeApp = useCallback(async () => {
+    try {
+      console.log('🔍 开始检测 Antigravity 安装...');
 
-  // 导入配置
-  const handleImport = async () => {
-    // TODO: 实现导入逻辑
-    showStatus('导入功能开发中...', false);
+      // 检测数据库路径和可执行文件
+      const [pathInfo, execInfo] = await Promise.all([
+        AntigravityPathService.detectAntigravityPath(),
+        AntigravityPathService.detectExecutable()
+      ]);
+
+      const bothFound = pathInfo.found && execInfo.found;
+
+      if (bothFound) {
+        console.log('✅ Antigravity 检测成功');
+        setIsDetecting(false);
+        // 延迟一点时间，确保UI渲染完成后再加载备份列表
+        setTimeout(() => {
+          refreshBackupList(true).catch(error => {
+            console.error('初始化备份列表失败:', error);
+          });
+        }, 100);
+      } else {
+        console.log('⚠️ Antigravity 未找到，显示路径选择');
+        setIsDetecting(false);
+        setIsPathDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('启动检测失败:', error);
+      setIsDetecting(false);
+      setIsPathDialogOpen(true);
+    }
+  }, [refreshBackupList]);
+
+  // 路径选择处理
+  const handlePathSelected = useCallback(async () => {
+    setIsPathDialogOpen(false);
+    // 路径选择成功后，重新初始化
+    await initializeApp();
+  }, [initializeApp]);
+
+  const handlePathDialogCancel = useCallback(async () => {
+    try {
+      await exit(0);
+    } catch (error) {
+      console.error('退出应用失败:', error);
+    }
+  }, []);
+
+  // 组件启动时执行初始化
+  React.useEffect(() => {
+    initializeApp();
+  }, [initializeApp]);
+
+  // 合并 loading 状态
+  const loadingState = {
+    isProcessLoading,
+    isImporting: configLoadingState.isImporting,
+    isExporting: configLoadingState.isExporting
   };
 
-  // 导出配置
-  const handleExport = async () => {
-    // TODO: 实现导出逻辑
-    showStatus('导出功能开发中...', false);
-  };
+  // ========== 渲染逻辑 ==========
+  if (isDetecting) {
+    return (
+      <TooltipProvider>
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 mx-auto mb-6 text-blue-500"></div>
+            <h2 className="text-2xl font-semibold mb-2 text-gray-800 dark:text-gray-100">
+              正在检测 Antigravity...
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400">
+              请稍候，正在查找 Antigravity 安装路径
+            </p>
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  }
 
-  // 备份并重启
-  const handleBackupAndRestart = async () => {
-    // TODO: 实现备份重启逻辑
-    showStatus('登录新账户功能开发中...', false);
-  };
-
-  // 取消密码对话框
-  const handlePasswordDialogCancel = () => {
-    setPasswordDialog(prev => ({ ...prev, isOpen: false }));
-  };
+  if (isPathDialogOpen) {
+    return (
+      <TooltipProvider>
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+          <AntigravityPathDialog
+            isOpen={true}
+            onPathSelected={handlePathSelected}
+            onCancel={handlePathDialogCancel}
+          />
+        </div>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>
-      {/* 路径检测中显示加载界面 */}
-      {isDetecting && (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4 mx-auto"></div>
-            <p className="text-slate-600">正在检测 Antigravity 安装...</p>
-          </div>
-        </div>
-      )}
-
-      {/* 主应用界面 */}
-      {!isPathDialogOpen && !isDetecting && (
-        <>
-          <Toolbar
-            onRefresh={refreshBackupList}
-            isRefreshing={isRefreshing}
-            onImport={handleImport}
-            onExport={handleExport}
-            hasUserData={backups.length > 0}
-            isCheckingData={isDetecting}
-            onBackupAndRestart={handleBackupAndRestart}
-            loadingState={loadingState}
-            showStatus={showStatus}
-            passwordDialog={passwordDialog}
-            onPasswordDialogCancel={handlePasswordDialogCancel}
-            onSettingsClick={() => setIsSettingsOpen(true)}
-          />
-
-          <div className="container">
-            <ManageSection
-              backups={backups}
-              showStatus={showStatus}
-              onRefresh={refreshBackupList}
-            />
-          </div>
-
-          <StatusNotification
-            status={status}
-          />
-        </>
-      )}
-
-      {/* 路径选择对话框 */}
-      <AntigravityPathDialog
-        isOpen={isPathDialogOpen}
-        onPathSelected={handlePathSelected}
-        onCancel={handlePathDialogCancel}
+      <Toolbar
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        onImport={importConfig}
+        onExport={exportConfig}
+        hasUserData={hasUserData}
+        isCheckingData={isCheckingData}
+        onBackupAndRestart={backupAndRestartAntigravity}
+        loadingState={loadingState}
+        showStatus={showStatus}
+        passwordDialog={passwordDialog}
+        onPasswordDialogCancel={handlePasswordDialogCancel}
+        onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
-      {/* 设置对话框 */}
+      <div className="container">
+        <ManageSection
+          backups={backups}
+          showStatus={showStatus}
+          onRefresh={refreshBackupList}
+        />
+      </div>
+
+      <StatusNotification status={status} />
+
+      <PasswordDialog
+        isOpen={passwordDialog.isOpen}
+        title={passwordDialog.title}
+        description={passwordDialog.description}
+        requireConfirmation={passwordDialog.requireConfirmation}
+        onSubmit={passwordDialog.onSubmit}
+        onCancel={handlePasswordDialogCancel}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            closePasswordDialog();
+          }
+        }}
+        validatePassword={passwordDialog.validatePassword}
+      />
+
       <SettingsDialog
         isOpen={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}

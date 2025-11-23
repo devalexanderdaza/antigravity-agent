@@ -4,10 +4,9 @@
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::Value;
 use std::fs;
-use std::path::PathBuf;
 
 use crate::constants::database;
-use crate::platform_utils;
+use crate::path_utils::AppPaths;
 
 /// 智能备份 Antigravity 账户（终极版 - 保存完整 Marker）
 ///
@@ -25,17 +24,16 @@ use crate::platform_utils;
 pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), String> {
     log::info!("🔧 执行智能备份（完整 Marker 模式），邮箱: {}", email);
 
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".antigravity-agent")
-        .join("antigravity-accounts");
+    let config_dir = AppPaths::backup_dir().ok_or("无法获取备份目录")?;
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
 
     // 简单的覆盖逻辑：每个邮箱只保留一个备份
     let backup_name = email.to_string();
     let is_overwrite = config_dir.join(format!("{}.json", backup_name)).exists();
 
-    let app_data = platform_utils::get_antigravity_db_path().ok_or("未找到数据库路径")?;
+    let app_data = AppPaths::antigravity_data_dir()
+        .map(|path| path.join("state.vscdb"))
+        .ok_or("未找到数据库路径")?;
 
     if !app_data.exists() {
         return Err(format!("数据库文件不存在: {}", app_data.display()));

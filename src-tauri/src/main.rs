@@ -50,6 +50,9 @@ mod antigravity_path_config;
 /// 命令模块
 mod commands;
 
+/// 路径处理模块
+mod path_utils;
+
 // 重新导出命令函数以保持 invoke_handler 兼容性
 use crate::commands::{
     backup_and_restart_antigravity,
@@ -81,6 +84,7 @@ use crate::commands::{
     // process_commands
     kill_antigravity,
     is_antigravity_running,  // 新增
+    list_antigravity_processes,  // 新增调试命令
     list_backups,
     minimize_to_tray,
     // 最后2个有依赖的函数
@@ -239,6 +243,7 @@ fn main() {
             // 进程管理命令
             kill_antigravity,
             is_antigravity_running,  // 新增
+            list_antigravity_processes,  // 新增调试命令
             start_antigravity,
             backup_and_restart_antigravity,
             // 平台支持命令

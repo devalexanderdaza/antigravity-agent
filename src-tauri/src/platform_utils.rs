@@ -1,44 +1,9 @@
+use crate::path_utils::AppPaths;
 use std::path::PathBuf;
 
 /// 获取Antigravity应用数据目录（跨平台）
 pub fn get_antigravity_data_dir() -> Option<PathBuf> {
-    log::info!("🔍 开始自动检测 Antigravity 数据目录...");
-    
-    let result = match std::env::consts::OS {
-        "windows" => {
-            // Windows: %APPDATA%\Antigravity\User\globalStorage\
-            dirs::config_dir()
-                .map(|path| path.join("Antigravity").join("User").join("globalStorage"))
-        }
-        "macos" => {
-            // macOS: 基于 product.json 中的 dataFolderName: ".antigravity" 配置
-            // ~/Library/Application Support/Antigravity/User/globalStorage/
-            dirs::data_dir().map(|path| path.join("Antigravity").join("User").join("globalStorage"))
-        }
-        "linux" => {
-            // Linux: 基于 product.json 中的 dataFolderName: ".antigravity" 配置
-            // 优先使用 ~/.config/Antigravity/User/globalStorage/，备用 ~/.local/share/Antigravity/User/globalStorage/
-            dirs::config_dir() // 优先：~/.config
-                .map(|path| path.join("Antigravity").join("User").join("globalStorage"))
-                .or_else(|| {
-                    // 备用：~/.local/share
-                    dirs::data_dir()
-                        .map(|path| path.join("Antigravity").join("User").join("globalStorage"))
-                })
-        }
-        _ => {
-            // 其他系统：尝试使用数据目录
-            dirs::data_dir().map(|path| path.join("Antigravity").join("User").join("globalStorage"))
-        }
-    };
-    
-    if let Some(ref path) = result {
-        log::info!("✅ 找到 Antigravity 数据目录: {}", path.display());
-    } else {
-        log::warn!("⚠️ 未能自动检测到 Antigravity 数据目录");
-    }
-    
-    result
+    AppPaths::antigravity_data_dir()
 }
 
 /// 获取Antigravity状态数据库文件路径
@@ -122,26 +87,39 @@ pub fn kill_antigravity_processes() -> Result<String, String> {
 
     let mut killed_processes = Vec::new();
 
-    // 遍历所有进程，查找名为 "Antigravity" 的进程
+    // 定义需要关闭的进程模式（按优先级排序）
+    let process_patterns = get_antigravity_process_patterns();
+
     for (pid, process) in system.processes() {
         let process_name = process.name();
+        let process_cmd = process.cmd().join(" ");
 
-        // 精确匹配进程名 "Antigravity" (区分大小写)
-        if process_name == "Antigravity" {
+        // 检查进程名或命令行是否匹配任何模式
+        if matches_antigravity_process(process_name, &process_cmd, &process_patterns) {
             log::info!("🎯 找到目标进程: {} (PID: {})", process_name, pid);
+            log::info!("📝 命令行: {}", process_cmd);
 
             // 尝试终止进程
             if process.kill() {
-                killed_processes.push(format!("Antigravity (PID: {})", pid));
-                log::info!("✅ 成功终止进程: {}", pid);
+                killed_processes.push(format!("{} (PID: {})", process_name, pid));
+                log::info!("✅ 成功终止进程: {} (PID: {})", process_name, pid);
             } else {
-                log::warn!("⚠️ 终止进程失败: {}", pid);
+                log::warn!("⚠️ 终止进程失败: {} (PID: {})", process_name, pid);
+
+                // 尝试多次终止（如果第一次失败）
+                if process.kill() {
+                    killed_processes.push(format!("{} (PID: {} - 强制)", process_name, pid));
+                    log::info!("✅ 强制终止进程: {} (PID: {})", process_name, pid);
+                } else {
+                    log::error!("❌ 强制终止也失败: {} (PID: {})", process_name, pid);
+                }
             }
         }
     }
 
     if killed_processes.is_empty() {
-        log::info!("ℹ️ 未找到名为 'Antigravity' 的运行进程");
+        log::info!("ℹ️ 未找到匹配的 Antigravity 进程");
+        log::info!("🔍 搜索的进程模式: {:?}", process_patterns);
         Err("未找到Antigravity进程".to_string())
     } else {
         let success_msg = format!("已成功关闭Antigravity进程: {}", killed_processes.join(", "));
@@ -157,13 +135,140 @@ pub fn is_antigravity_running() -> bool {
     let mut system = sysinfo::System::new_all();
     system.refresh_all();
 
+    let process_patterns = get_antigravity_process_patterns();
+
     for (pid, process) in system.processes() {
-        if process.name() == "Antigravity" {
-            log::info!("✅ 发现运行中的 Antigravity 进程 (PID: {})", pid);
+        let process_name = process.name();
+        let process_cmd = process.cmd().join(" ");
+
+        if matches_antigravity_process(process_name, &process_cmd, &process_patterns) {
+            log::info!("✅ 发现运行中的 Antigravity 进程: {} (PID: {})", process_name, pid);
             return true;
         }
     }
 
     log::info!("ℹ️ 未发现运行中的 Antigravity 进程");
     false
+}
+
+/// 获取 Antigravity 进程匹配模式
+fn get_antigravity_process_patterns() -> Vec<ProcessPattern> {
+    match std::env::consts::OS {
+        "macos" => {
+            vec![
+                // 主要进程模式
+                ProcessPattern::ExactName("Antigravity"),
+                ProcessPattern::ExactName("Antigravity.app"),
+                ProcessPattern::ExactName("Electron"), // 如果Electron进程包含Antigravity路径
+
+                // macOS Electron 特有的进程名
+                ProcessPattern::Contains("Antigravity"),
+                ProcessPattern::Contains("Antigravity Helper"),
+                ProcessPattern::EndsWith("(Renderer)"),
+                ProcessPattern::EndsWith("(GPU)"),
+
+                // 命令行匹配
+                ProcessPattern::CmdContains("Antigravity.app"),
+                ProcessPattern::CmdContains("/Applications/Antigravity"),
+                ProcessPattern::CmdContains("Applications/Antigravity"),
+
+                // .app 包路径匹配
+                ProcessPattern::CmdEndsWith(".app/Contents/MacOS/Electron"),
+                ProcessPattern::CmdEndsWith(".app/Contents/MacOS/Antigravity"),
+            ]
+        }
+        "windows" => {
+            vec![
+                ProcessPattern::ExactName("Antigravity.exe"),
+                ProcessPattern::ExactName("Antigravity"),
+                ProcessPattern::Contains("Antigravity"),
+                ProcessPattern::CmdContains("Antigravity.exe"),
+            ]
+        }
+        "linux" => {
+            vec![
+                ProcessPattern::ExactName("antigravity"),
+                ProcessPattern::ExactName("Antigravity"),
+                ProcessPattern::Contains("Antigravity"),
+                ProcessPattern::CmdContains("antigravity"),
+                ProcessPattern::CmdContains("Antigravity.AppImage"),
+            ]
+        }
+        _ => {
+            vec![
+                ProcessPattern::Contains("Antigravity"),
+                ProcessPattern::Contains("antigravity"),
+            ]
+        }
+    }
+}
+
+/// 检查进程是否匹配 Antigravity 模式
+fn matches_antigravity_process(process_name: &str, process_cmd: &str, patterns: &[ProcessPattern]) -> bool {
+    for pattern in patterns {
+        match pattern {
+            ProcessPattern::ExactName(name) => {
+                if process_name == *name {
+                    log::debug!("✅ 精确匹配进程名: {}", name);
+                    return true;
+                }
+            }
+            ProcessPattern::Contains(text) => {
+                if process_name.contains(text) || process_cmd.contains(text) {
+                    log::debug!("✅ 包含匹配: {}", text);
+                    return true;
+                }
+            }
+            ProcessPattern::StartsWith(prefix) => {
+                if process_name.starts_with(prefix) || process_cmd.starts_with(prefix) {
+                    log::debug!("✅ 前缀匹配: {}", prefix);
+                    return true;
+                }
+            }
+            ProcessPattern::EndsWith(suffix) => {
+                if process_name.ends_with(suffix) || process_cmd.ends_with(suffix) {
+                    log::debug!("✅ 后缀匹配: {}", suffix);
+                    return true;
+                }
+            }
+            ProcessPattern::CmdContains(text) => {
+                if process_cmd.contains(text) {
+                    log::debug!("✅ 命令行包含匹配: {}", text);
+                    return true;
+                }
+            }
+            ProcessPattern::CmdEndsWith(suffix) => {
+                if process_cmd.ends_with(suffix) {
+                    log::debug!("✅ 命令行后缀匹配: {}", suffix);
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// 进程匹配模式
+#[derive(Debug, Clone)]
+pub enum ProcessPattern {
+    ExactName(&'static str),    // 精确匹配进程名
+    Contains(&'static str),      // 包含指定文本
+    StartsWith(&'static str),    // 以指定文本开头
+    EndsWith(&'static str),      // 以指定文本结尾
+    CmdContains(&'static str),   // 命令行包含指定文本
+    CmdEndsWith(&'static str),   // 命令行以指定文本结尾
+}
+
+/// 获取 Antigravity 进程匹配模式（用于调试）
+pub fn get_antigravity_process_patterns_for_debug() -> Vec<ProcessPattern> {
+    get_antigravity_process_patterns()
+}
+
+/// 检查进程是否匹配 Antigravity 模式（用于调试）
+pub fn matches_antigravity_process_for_debug(
+    process_name: &str,
+    process_cmd: &str,
+    pattern: &ProcessPattern
+) -> bool {
+    matches_antigravity_process(process_name, process_cmd, &[pattern.clone()])
 }

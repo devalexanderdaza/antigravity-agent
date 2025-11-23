@@ -17,7 +17,7 @@ interface UseAppInitializationResult {
  * 负责检测 Antigravity 路径和初始化应用
  */
 export function useAppInitialization(
-    refreshBackupList: (skipAutoBackup?: boolean) => Promise<void>
+    refreshBackupList?: (skipAutoBackup?: boolean) => Promise<void>
 ): UseAppInitializationResult {
     const [isDetecting, setIsDetecting] = useState(true);
     const [antigravityFound, setAntigravityFound] = useState<boolean | null>(null);
@@ -29,8 +29,10 @@ export function useAppInitialization(
     const handlePathSelected = () => {
         setIsPathDialogOpen(false);
         setAntigravityFound(true);
-        // 路径设置完成后加载备份列表
-        refreshBackupList(true).catch(console.error);
+        // 路径设置完成后加载备份列表（如果提供了回调函数）
+        if (refreshBackupList) {
+            refreshBackupList(true).catch(console.error);
+        }
     };
 
     /**
@@ -68,9 +70,11 @@ export function useAppInitialization(
                     console.log('✅ Antigravity 可执行文件检测成功:', execInfo.path);
                     setAntigravityFound(true);
 
-                    // 自动加载备份列表（跳过自动备份，只读取列表）
-                    console.log('📋 自动加载备份列表...');
-                    await refreshBackupList(true);
+                    // 如果提供了回调函数，则自动加载备份列表（跳过自动备份，只读取列表）
+                    if (refreshBackupList) {
+                        console.log('📋 自动加载备份列表...');
+                        await refreshBackupList(true);
+                    }
 
                     // 检测和初始化完成
                     setIsDetecting(false);

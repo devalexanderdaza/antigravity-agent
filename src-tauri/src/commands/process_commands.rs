@@ -19,6 +19,43 @@ pub async fn is_antigravity_running() -> bool {
     crate::platform_utils::is_antigravity_running()
 }
 
+/// 列出所有 Antigravity 相关的进程（用于调试）
+#[tauri::command]
+pub async fn list_antigravity_processes() -> Result<Vec<serde_json::Value>, String> {
+    use serde_json::json;
+
+    log::info!("🔍 搜索所有 Antigravity 相关进程");
+
+    let mut system = sysinfo::System::new_all();
+    system.refresh_all();
+
+    let mut found_processes = Vec::new();
+    let process_patterns = crate::platform_utils::get_antigravity_process_patterns_for_debug();
+
+    for (pid, process) in system.processes() {
+        let process_name = process.name();
+        let process_cmd = process.cmd().join(" ");
+
+        for (i, pattern) in process_patterns.iter().enumerate() {
+            if crate::platform_utils::matches_antigravity_process_for_debug(
+                process_name, &process_cmd, pattern
+            ) {
+                found_processes.push(json!({
+                    "pid": pid.to_string(),
+                    "name": process_name,
+                    "command": process_cmd,
+                    "matched_pattern": i,
+                    "pattern_description": format!("{:?}", pattern)
+                }));
+                break; // 每个进程只记录一次
+            }
+        }
+    }
+
+    log::info!("📊 找到 {} 个 Antigravity 相关进程", found_processes.len());
+    Ok(found_processes)
+}
+
 /// 备份并重启 Antigravity
 #[tauri::command]
 pub async fn backup_and_restart_antigravity() -> Result<String, String> {

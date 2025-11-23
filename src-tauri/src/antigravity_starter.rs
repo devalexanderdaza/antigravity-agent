@@ -3,7 +3,7 @@
 /// 提供跨平台的 Antigravity 应用程序启动功能
 /// 支持 Windows、macOS 和 Linux 系统
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// 启动 Antigravity 应用程序（主入口函数）
 ///
@@ -45,15 +45,14 @@ pub fn start_antigravity() -> Result<String, String> {
 /// 在 Windows 平台启动 Antigravity
 fn start_antigravity_windows() -> Result<String, String> {
     let mut errors = Vec::new();
-    let antigravity_paths = get_antigravity_windows_paths();
+    let antigravity_paths = crate::path_utils::AppPaths::antigravity_executable_paths();
 
     // 尝试所有推测的路径
     for path in &antigravity_paths {
         if path.exists() {
-            eprintln!("找到并尝试启动: {}", path.display());
             match try_start_from_path(path) {
                 Ok(_) => {
-                    return Ok(format!("Antigravity启动成功 ({})", path.display()));
+                    return Ok("Antigravity 已启动".to_string());
                 }
                 Err(e) => {
                     errors.push(format!("{}: {}", path.display(), e));
@@ -81,15 +80,14 @@ fn start_antigravity_windows() -> Result<String, String> {
 /// 在 macOS 平台启动 Antigravity
 fn start_antigravity_macos() -> Result<String, String> {
     let mut errors = Vec::new();
-    let antigravity_paths = get_antigravity_macos_paths();
+    let antigravity_paths = crate::path_utils::AppPaths::antigravity_executable_paths();
 
     // 尝试所有推测的路径
     for path in &antigravity_paths {
         if path.exists() {
-            eprintln!("找到并尝试启动: {}", path.display());
             match try_start_from_path(path) {
                 Ok(_) => {
-                    return Ok(format!("Antigravity启动成功 ({})", path.display()));
+                    return Ok("Antigravity 已启动".to_string());
                 }
                 Err(e) => {
                     errors.push(format!("{}: {}", path.display(), e));
@@ -126,15 +124,14 @@ fn start_antigravity_macos() -> Result<String, String> {
 /// 在 Linux 平台启动 Antigravity
 fn start_antigravity_linux() -> Result<String, String> {
     let mut errors = Vec::new();
-    let antigravity_paths = get_antigravity_linux_paths();
+    let antigravity_paths = crate::path_utils::AppPaths::antigravity_executable_paths();
 
     // 尝试所有推测的路径
     for path in &antigravity_paths {
         if path.exists() {
-            eprintln!("找到并尝试启动: {}", path.display());
             match try_start_from_path(path) {
                 Ok(_) => {
-                    return Ok(format!("Antigravity启动成功 ({})", path.display()));
+                    return Ok("Antigravity 已启动".to_string());
                 }
                 Err(e) => {
                     errors.push(format!("{}: {}", path.display(), e));
@@ -159,120 +156,14 @@ fn start_antigravity_linux() -> Result<String, String> {
     }
 }
 
-/// 获取 Windows 平台下 Antigravity 的可能安装路径
-fn get_antigravity_windows_paths() -> Vec<PathBuf> {
-    let mut antigravity_paths = Vec::new();
 
-    // 1. 基于用户主目录构建可能的路径
-    if let Some(home) = dirs::home_dir() {
-        // C:\Users\{用户名}\AppData\Local\Programs\Antigravity\Antigravity.exe (最常见)
-        antigravity_paths.push(home.join(r"AppData\Local\Programs\Antigravity\Antigravity.exe"));
-        // C:\Users\{用户名}\AppData\Roaming\Local\Programs\Antigravity\Antigravity.exe
-        antigravity_paths
-            .push(home.join(r"AppData\Roaming\Local\Programs\Antigravity\Antigravity.exe"));
-    }
 
-    // 2. 使用 data_local_dir (通常是 C:\Users\{用户名}\AppData\Local)
-    if let Some(local_data) = dirs::data_local_dir() {
-        antigravity_paths.push(local_data.join(r"Programs\Antigravity\Antigravity.exe"));
-    }
-
-    // 3. 其他可能的位置
-    antigravity_paths.push(PathBuf::from(
-        r"C:\Program Files\Antigravity\Antigravity.exe",
-    ));
-    antigravity_paths.push(PathBuf::from(
-        r"C:\Program Files (x86)\Antigravity\Antigravity.exe",
-    ));
-
-    antigravity_paths
-}
-
-/// 获取 macOS 平台下 Antigravity 的可能安装路径
-fn get_antigravity_macos_paths() -> Vec<PathBuf> {
-    let mut antigravity_paths = Vec::new();
-
-    // 直接检查常见的 .app bundle 位置
-    let app_bundle_locations = vec![
-        PathBuf::from("/Applications/Antigravity.app"),
-        PathBuf::from("/Applications/Antigravity-electron.app"),
-        PathBuf::from("/Applications/Antigravity-alpha.app"),
-        PathBuf::from("/Applications/Antigravity-beta.app"),
-    ];
-
-    // 如果有用户主目录，也检查用户应用目录
-    let mut locations_to_check = app_bundle_locations;
-    if let Some(home) = dirs::home_dir() {
-        locations_to_check.push(home.join("Applications/Antigravity.app"));
-        locations_to_check.push(home.join("Applications/Antigravity-electron.app"));
-        locations_to_check.push(home.join("Applications/Antigravity-alpha.app"));
-        locations_to_check.push(home.join("Applications/Antigravity-beta.app"));
-    }
-
-    // 检查每个 .app bundle 是否存在（检查.app本身，不是内部可执行文件）
-    for app_path in locations_to_check {
-        if app_path.exists() && app_path.is_dir() {
-            // 验证这是一个有效的 .app bundle（包含 Contents/MacOS 目录）
-            let macos_dir = app_path.join("Contents/MacOS");
-            let info_plist = app_path.join("Contents/Info.plist");
-
-            if macos_dir.exists() && info_plist.exists() {
-                log::info!("✅ 找到有效的 Antigravity.app: {}", app_path.display());
-                antigravity_paths.push(app_path.clone());
-
-                // 检查内部可执行文件
-                let possible_execs = ["Electron", "Antigravity", "antigravity"];
-                for exec_name in &possible_execs {
-                    let exec_path = macos_dir.join(exec_name);
-                    if exec_path.exists() && exec_path.is_file() {
-                        log::info!("  📁 找到可执行文件: {}", exec_path.display());
-                        break;
-                    }
-                }
-            } else {
-                log::warn!("⚠️ 应用程序不完整: {} (缺少 Contents/MacOS 或 Info.plist)", app_path.display());
-            }
-        }
-    }
-
-    antigravity_paths
-}
-
-/// 获取 Linux 平台下 Antigravity 的可能安装路径
-fn get_antigravity_linux_paths() -> Vec<PathBuf> {
-    let mut antigravity_paths = Vec::new();
-
-    // 1. 系统全局安装路径
-    antigravity_paths.push(PathBuf::from("/usr/share/antigravity/antigravity"));
-    antigravity_paths.push(PathBuf::from("/usr/bin/antigravity"));
-    antigravity_paths.push(PathBuf::from("/usr/local/bin/antigravity"));
-    
-    // 2. Snap 包安装路径
-    antigravity_paths.push(PathBuf::from("/snap/bin/antigravity"));
-    
-    // 3. AppImage 常见位置
-    if let Some(home) = dirs::home_dir() {
-        antigravity_paths.push(home.join("Applications/Antigravity.AppImage"));
-        antigravity_paths.push(home.join(".local/bin/antigravity"));
-        antigravity_paths.push(home.join("bin/antigravity"));
-    }
-    
-    // 4. Flatpak 安装路径
-    antigravity_paths.push(PathBuf::from("/var/lib/flatpak/exports/bin/antigravity"));
-    if let Some(home) = dirs::home_dir() {
-        antigravity_paths.push(home.join(".local/share/flatpak/exports/bin/antigravity"));
-    }
-
-    antigravity_paths
-}
 
 /// 尝试从指定路径启动应用程序
 fn try_start_from_path(path: &PathBuf) -> Result<String, String> {
     // macOS 需要特殊处理：使用 open 命令启动 .app 应用
     #[cfg(target_os = "macos")]
     {
-        log::info!("🍎 macOS: 尝试启动应用: {}", path.display());
-
         // 确保路径是 .app bundle 格式
         let app_bundle_path = if path.to_str().unwrap_or("").contains(".app") {
             path.clone()
@@ -281,75 +172,94 @@ fn try_start_from_path(path: &PathBuf) -> Result<String, String> {
         };
 
         // 方法1: 尝试不带 -n 参数的 open 命令（更兼容）
-        log::info!("🍎 macOS: 使用 open 命令（方法1）: {}", app_bundle_path.display());
         match Command::new("open")
             .arg("-g")  // 在后台启动应用
             .arg(&app_bundle_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
         {
             Ok(_) => {
-                return Ok(format!("成功启动 Antigravity (macOS open -g 命令): {}", app_bundle_path.display()));
+                return Ok("Antigravity 已启动".to_string());
             }
             Err(e1) => {
-                log::warn!("⚠️ 方法1失败: {}, 尝试方法2...", e1);
-
                 // 方法2: 尝试直接执行可执行文件
                 let exec_names = ["Electron", "Antigravity", "antigravity"];
                 for exec_name in &exec_names {
                     let exec_path = app_bundle_path.join("Contents/MacOS").join(exec_name);
                     if exec_path.exists() {
-                        log::info!("🍎 macOS: 直接执行可执行文件（方法2）: {}", exec_path.display());
-                        match Command::new(&exec_path).spawn() {
+                        match Command::new(&exec_path)
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .spawn()
+                        {
                             Ok(_) => {
-                                return Ok(format!("成功启动 Antigravity (直接执行): {}", exec_path.display()));
+                                return Ok("Antigravity 已启动".to_string());
                             }
-                            Err(e2) => {
-                                log::warn!("⚠️ 直接执行 {} 失败: {}", exec_name, e2);
+                            Err(_) => {
+                                continue; // 尝试下一个可执行文件
                             }
                         }
                     }
                 }
 
                 // 方法3: 最后尝试不带任何参数的 open 命令
-                log::info!("🍎 macOS: 使用 open 命令（方法3 - 最后尝试）: {}", app_bundle_path.display());
                 match Command::new("open")
                     .arg(&app_bundle_path)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
                     .spawn()
                 {
                     Ok(_) => {
-                        return Ok(format!("成功启动 Antigravity (macOS open 命令): {}", app_bundle_path.display()));
+                        return Ok("Antigravity 已启动".to_string());
                     }
                     Err(e3) => {
-                        return Err(format!(
-                            "所有启动方法都失败了:\n方法1 (open -g): {}\n方法2 (直接执行): 遍历了所有可执行文件但都失败\n方法3 (open): {}",
-                            e1, e3
-                        ));
+                        return Err("启动 Antigravity 失败".to_string());
                     }
                 }
             }
         }
     }
 
-    // Windows 和 Linux 直接执行二进制文件
+    // Windows 和 Linux 直接执行二进制文件（静默启动）
     #[cfg(not(target_os = "macos"))]
     {
-        Command::new(path)
-            .spawn()
-            .map_err(|e| format!("启动失败: {}", e))?;
+        // Windows：重定向输出到 null 设备
+        #[cfg(target_os = "windows")]
+        {
+            Command::new(path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|e| format!("启动失败: {}", e))?;
+        }
 
-        Ok(format!("成功启动应用程序"))
+        // Linux：重定向输出到 null 设备
+        #[cfg(target_os = "linux")]
+        {
+            Command::new(path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|e| format!("启动失败: {}", e))?;
+        }
+
+        Ok("Antigravity 已启动".to_string())
     }
 }
 
-/// 尝试从系统命令启动应用程序
+/// 尝试从系统命令启动应用程序（静默启动）
 fn try_start_from_commands(commands: Vec<&str>) -> Result<String, String> {
     let mut errors = Vec::new();
 
     for cmd in commands {
-        eprintln!("尝试命令: {}", cmd);
-        match Command::new(cmd).spawn() {
+        match Command::new(cmd)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
             Ok(_) => {
-                return Ok(format!("Antigravity启动成功 (命令: {})", cmd));
+                return Ok("Antigravity 已启动".to_string());
             }
             Err(e) => {
                 errors.push(format!("{}命令: {}", cmd, e));
@@ -364,47 +274,21 @@ fn try_start_from_commands(commands: Vec<&str>) -> Result<String, String> {
 /// 检测 Antigravity 可执行文件路径（不启动，只检测）
 pub fn detect_antigravity_executable() -> Option<PathBuf> {
     log::info!("🔍 开始自动检测 Antigravity 可执行文件...");
-    
-    let result = match std::env::consts::OS {
-        "windows" => {
-            let paths = get_antigravity_windows_paths();
-            paths.into_iter().find(|p| {
-                if p.exists() {
-                    log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
-                    true
-                } else {
-                    false
-                }
-            })
-        },
-        "macos" => {
-            let paths = get_antigravity_macos_paths();
-            paths.into_iter().find(|p| {
-                if p.exists() {
-                    log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
-                    true
-                } else {
-                    false
-                }
-            })
-        },
-        "linux" => {
-            let paths = get_antigravity_linux_paths();
-            paths.into_iter().find(|p| {
-                if p.exists() {
-                    log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
-                    true
-                } else {
-                    false
-                }
-            })
-        },
-        _ => None,
-    };
-    
+
+    let paths = crate::path_utils::AppPaths::antigravity_executable_paths();
+
+    let result = paths.into_iter().find(|p| {
+        if p.exists() {
+            log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
+            true
+        } else {
+            false
+        }
+    });
+
     if result.is_none() {
         log::warn!("⚠️ 未能自动检测到 Antigravity 可执行文件");
     }
-    
+
     result
 }

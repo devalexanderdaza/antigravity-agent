@@ -80,10 +80,13 @@ export function useConfigManager(
      * 导入配置文件
      */
     const importConfig = useCallback(async () => {
+        console.log('🔍 [导入] 开始导入配置文件');
         try {
             const result = await configManager.importEncryptedConfig();
+            console.log('📋 [导入] 文件选择结果:', result);
 
             if (!result.success) {
+                console.log('❌ [导入] 文件选择失败:', result.message);
                 showStatus(result.message, true);
                 return;
             }

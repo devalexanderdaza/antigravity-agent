@@ -6,8 +6,9 @@ use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 
-// 导入 platform_utils 模块
+// 导入相关模块
 use crate::constants::database;
+use crate::path_utils::AppPaths;
 use crate::platform_utils;
 
 /// 从备份的 Marker 中获取 Key 对应的 flag (0 或 1)
