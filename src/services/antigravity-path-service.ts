@@ -1,0 +1,101 @@
+import { invoke } from '@tauri-apps/api/core';
+import type { AntigravityPathInfo, AntigravityExecutableInfo, CurrentPaths } from '../types/tauri';
+
+/**
+ * Antigravity 路径服务
+ * 封装路径检测、验证和保存相关操作
+ */
+export class AntigravityPathService {
+    /**
+     * 检测 Antigravity 安装路径
+     */
+    static async detectAntigravityPath(): Promise<AntigravityPathInfo> {
+        try {
+            const result = await invoke<AntigravityPathInfo>('detect_antigravity_installation');
+            return result;
+        } catch (error) {
+            console.error('检测 Antigravity 路径失败:', error);
+            throw new Error(`检测失败: ${error}`);
+        }
+    }
+
+    /**
+     * 验证指定路径是否有效
+     * @param path 要验证的路径
+     */
+    static async validatePath(path: string): Promise<boolean> {
+        try {
+            const isValid = await invoke<boolean>('validate_antigravity_path', { path });
+            return isValid;
+        } catch (error) {
+            console.error('验证路径失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 保存用户选择的数据路径
+     * @param path 要保存的路径
+     */
+    static async savePath(path: string): Promise<string> {
+        try {
+            const result = await invoke<string>('save_antigravity_path', { path });
+            return result;
+        } catch (error) {
+            console.error('保存路径失败:', error);
+            throw new Error(`保存失败: ${error}`);
+        }
+    }
+
+    /**
+     * 检测 Antigravity 可执行文件路径
+     */
+    static async detectExecutable(): Promise<AntigravityExecutableInfo> {
+        try {
+            const result = await invoke<AntigravityExecutableInfo>('detect_antigravity_executable');
+            return result;
+        } catch (error) {
+            console.error('检测 Antigravity 可执行文件失败:', error);
+            throw new Error(`检测失败: ${error}`);
+        }
+    }
+
+    /**
+     * 验证可执行文件路径是否有效
+     */
+    static async validateExecutable(path: string): Promise<boolean> {
+        try {
+            const isValid = await invoke<boolean>('validate_antigravity_executable', { path });
+            return isValid;
+        } catch (error) {
+            console.error('验证可执行文件路径失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 保存用户选择的可执行文件路径
+     */
+    static async saveExecutable(path: string): Promise<string> {
+        try {
+            const result = await invoke<string>('save_antigravity_executable', { path });
+            return result;
+        } catch (error) {
+            console.error('保存可执行文件路径失败:', error);
+            throw new Error(`保存失败: ${error}`);
+        }
+    }
+
+    /**
+     * 获取当前配置的路径
+     */
+    static async getCurrentPaths(): Promise<CurrentPaths> {
+        try {
+            const result = await invoke<CurrentPaths>('get_current_paths');
+            return result;
+        } catch (error) {
+            console.error('获取当前路径失败:', error);
+            throw new Error(`获取失败: ${error}`);
+        }
+    }
+}

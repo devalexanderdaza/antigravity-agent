@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { exit } from '@tauri-apps/plugin-process';
 import type { ListBackupsResult } from './types/tauri';
 import ManageSection from './components/ManageSection';
 import StatusNotification from './components/StatusNotification';
 import Toolbar from './components/Toolbar';
+import AntigravityPathDialog from './components/AntigravityPathDialog';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useDevToolsShortcut } from './hooks/useDevToolsShortcut';
+import { AntigravityPathService } from './services/antigravity-path-service';
+import SettingsDialog from './components/SettingsDialog'; // 新增
 
 interface Status {
   message: string;
@@ -17,6 +21,9 @@ function App() {
   const [backups, setBackups] = useState<string[]>([]);
   const [status, setStatus] = useState<Status>({ message: '', isError: false });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPathDialogOpen, setIsPathDialogOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);  // 新增
+  const [antigravityFound, setAntigravityFound] = useState<boolean | null>(null);
 
   // 启用开发者工具快捷键 (Shift+Ctrl+I)
   useDevToolsShortcut();
@@ -107,19 +114,62 @@ function App() {
     }
   };
 
+  const handlePathSelected = () => {
+    setIsPathDialogOpen(false);
+    setAntigravityFound(true);
+    // 路径设置完成后加载备份列表
+    refreshBackupList(true).catch(console.error);
+  };
+
+  const handlePathDialogCancel = async () => {
+    // 用户取消选择路径，退出应用
+    try {
+      await exit(0);
+    } catch (error) {
+      console.error('退出应用失败:', error);
+    }
+  };
+
   useEffect(() => {
-    // 应用启动时自动加载备份文件列表
-    const loadInitialData = async () => {
+    // 应用启动时检测 Antigravity 路径
+    const detectAndInit = async () => {
       try {
-        const backupList = await invoke<ListBackupsResult>('list_backups');
-        setBackups(backupList);
+        console.log('🔍 检测 Antigravity 安装路径...');
+
+        // 检测数据库路径
+        const pathInfo = await AntigravityPathService.detectAntigravityPath();
+
+        // 检测可执行文件路径
+        const execInfo = await AntigravityPathService.detectExecutable();
+
+        if (pathInfo.found) {
+          console.log('✅ Antigravity 数据库路径检测成功:', pathInfo.path);
+          setAntigravityFound(true);
+
+          // 可执行文件未找到时发出警告，但不阻止使用
+          if (!execInfo.found) {
+            console.warn('⚠️ 未检测到 Antigravity 可执行文件，启动功能可能不可用');
+          } else {
+            console.log('✅ Antigravity 可执行文件检测成功:', execInfo.path);
+          }
+
+          // 加载备份列表
+          const backupList = await invoke<ListBackupsResult>('list_backups');
+          setBackups(backupList);
+        } else {
+          console.log('⚠️ 未找到 Antigravity 数据库，显示路径选择对话框');
+          setAntigravityFound(false);
+          setIsPathDialogOpen(true);
+        }
       } catch (error) {
-        console.error('启动时加载备份列表失败:', error);
-        // 静默失败，不影响用户体验
+        console.error('启动检测失败:', error);
+        // 检测失败时也显示路径选择对话框
+        setAntigravityFound(false);
+        setIsPathDialogOpen(true);
       }
     };
 
-    loadInitialData();
+    detectAndInit();
   }, []);
 
   return (
@@ -194,17 +244,40 @@ function App() {
       `}</style>
 
       <div>
-        <Toolbar onRefresh={handleRefresh} isRefreshing={isRefreshing} showStatus={showStatus} />
+        {!isPathDialogOpen && (
+          <>
+            <Toolbar
+              onRefresh={refreshBackupList}
+              isRefreshing={isRefreshing}
+              showStatus={showStatus}
+              onSettingsClick={() => setIsSettingsOpen(true)}
+            />
 
-        <div className="container">
-          <ManageSection
-            backups={backups}
-            showStatus={showStatus}
-            onRefresh={refreshBackupList}
-          />
-        </div>
+            <div className="container">
+              <ManageSection
+                backups={backups}
+                showStatus={showStatus}
+                onRefresh={refreshBackupList}
+              />
+            </div>
 
-        <StatusNotification status={status} />
+            <StatusNotification
+              status={status}
+            />
+          </>
+        )}
+
+        {/* 路径选择对话框 */}
+        <AntigravityPathDialog
+          isOpen={isPathDialogOpen}
+          onPathSelected={handlePathSelected}
+          onCancel={handlePathDialogCancel}
+        />
+
+        <SettingsDialog
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
       </div>
     </TooltipProvider>
   );

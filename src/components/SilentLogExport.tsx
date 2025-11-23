@@ -7,13 +7,13 @@ import { VibratingButton } from './VibratingButton';
 const LOG_FILE_FILTERS = [
   {
     name: '日志文件',
-    extensions: ['log'] as const
+    extensions: ['log']
   },
   {
     name: '所有文件',
-    extensions: ['*'] as const
+    extensions: ['*']
   }
-];
+] as const;
 
 interface SilentLogExportProps {
   children: React.ReactNode;
@@ -60,7 +60,7 @@ export const SilentLogExport: React.FC<SilentLogExportProps> = ({ children }) =>
       const selectedPath = await save({
         title: '保存日志文件',
         defaultPath: defaultFileName,
-        filters: LOG_FILE_FILTERS
+        filters: LOG_FILE_FILTERS as any
       });
 
       // 4. 检查用户是否选择了路径

@@ -9,13 +9,13 @@ const VIBRATION_START_DELAY = 500; // 震动开始延迟（毫秒）
 const LOG_FILE_FILTERS = [
   {
     name: '日志文件',
-    extensions: ['log'] as const
+    extensions: ['log']
   },
   {
     name: '所有文件',
-    extensions: ['*'] as const
+    extensions: ['*']
   }
-];
+] as const;
 
 
 /**
@@ -23,7 +23,7 @@ const LOG_FILE_FILTERS = [
  * 处理长按事件和日志导出逻辑
  */
 export const useLongPressExport = () => {
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
   /**
@@ -63,7 +63,7 @@ export const useLongPressExport = () => {
       const selectedPath = await save({
         title: '保存日志文件',
         defaultPath: defaultFileName,
-        filters: LOG_FILE_FILTERS
+        filters: LOG_FILE_FILTERS as any
       });
 
       // 4. 检查用户是否选择了路径

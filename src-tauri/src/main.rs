@@ -44,6 +44,9 @@ mod config_manager;
 /// 工具模块
 mod utils;
 
+/// Antigravity 路径配置模块
+mod antigravity_path_config;
+
 /// 命令模块
 mod commands;
 
@@ -57,6 +60,8 @@ use crate::commands::{
     clear_logs,
     collect_backup_contents,
     delete_backup,
+    detect_antigravity_executable,  // 新增
+    detect_antigravity_installation,  // 新增
     disable_system_tray,
     // tray_commands
     enable_system_tray,
@@ -69,6 +74,7 @@ use crate::commands::{
     get_log_info,
     get_recent_accounts,
     // platform_commands
+    get_current_paths,  // 新增
     get_platform_info,
     get_system_tray_state,
     is_system_tray_enabled,
@@ -81,11 +87,14 @@ use crate::commands::{
     restore_backup_files,
     restore_from_tray,
     restore_profile,
+    save_antigravity_executable,  // 新增
+    save_antigravity_path,  // 新增
     save_system_tray_state,
     start_antigravity,
     // account_commands (前5个零依赖函数)
     switch_antigravity_account,
     switch_to_antigravity_account,
+    validate_antigravity_executable,  // 新增
     validate_antigravity_path,
 };
 
@@ -233,7 +242,15 @@ fn main() {
             // 平台支持命令
             get_platform_info,
             find_antigravity_installations,
+            get_current_paths,  // 新增
+            // 数据库路径相关
             validate_antigravity_path,
+            detect_antigravity_installation,
+            save_antigravity_path,
+            // 可执行文件路径相关
+            validate_antigravity_executable,
+            detect_antigravity_executable,
+            save_antigravity_executable,
             enable_system_tray,
             disable_system_tray,
             minimize_to_tray,

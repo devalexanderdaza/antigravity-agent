@@ -3,7 +3,9 @@ use std::process::Command;
 
 /// 获取Antigravity应用数据目录（跨平台）
 pub fn get_antigravity_data_dir() -> Option<PathBuf> {
-    match std::env::consts::OS {
+    log::info!("🔍 开始自动检测 Antigravity 数据目录...");
+    
+    let result = match std::env::consts::OS {
         "windows" => {
             // Windows: %APPDATA%\Antigravity\User\globalStorage\
             dirs::config_dir()
@@ -29,13 +31,35 @@ pub fn get_antigravity_data_dir() -> Option<PathBuf> {
             // 其他系统：尝试使用数据目录
             dirs::data_dir().map(|path| path.join("Antigravity").join("User").join("globalStorage"))
         }
+    };
+    
+    if let Some(ref path) = result {
+        log::info!("✅ 找到 Antigravity 数据目录: {}", path.display());
+    } else {
+        log::warn!("⚠️ 未能自动检测到 Antigravity 数据目录");
     }
+    
+    result
 }
 
 /// 获取Antigravity状态数据库文件路径
+/// 优先使用用户自定义路径，其次使用自动检测的路径
 pub fn get_antigravity_db_path() -> Option<PathBuf> {
+    // 1. 尝试从配置文件读取用户自定义路径
+    if let Ok(Some(custom_path)) = crate::antigravity_path_config::get_custom_data_path() {
+        let db_path = PathBuf::from(&custom_path).join("state.vscdb");
+        if db_path.exists() && db_path.is_file() {
+            log::info!("📍 使用自定义 Antigravity 数据路径: {}", custom_path);
+            return Some(db_path);
+        } else {
+            log::warn!("⚠️ 自定义数据路径无效，回退到自动检测: {}", custom_path);
+        }
+    }
+    
+    // 2. 回退到自动检测路径
     get_antigravity_data_dir().map(|dir| dir.join("state.vscdb"))
 }
+
 
 /// 检查Antigravity是否安装并运行
 pub fn is_antigravity_available() -> bool {

@@ -21,6 +21,19 @@ use std::process::Command;
 /// }
 /// ```
 pub fn start_antigravity() -> Result<String, String> {
+    // 优先使用用户配置的可执行文件路径
+    if let Ok(Some(custom_exec)) = crate::antigravity_path_config::get_custom_executable_path() {
+        let path = PathBuf::from(&custom_exec);
+        if path.exists() && path.is_file() {
+            log::info!("📁 使用自定义 Antigravity 可执行文件: {}", custom_exec);
+            return try_start_from_path(&path)
+                .map_err(|e| format!("无法启动自定义 Antigravity: {}. 请检查路径是否正确", e));
+        } else {
+            log::warn!("⚠️ 自定义可执行文件路径无效: {}", custom_exec);
+        }
+    }
+    
+    // 回退到自动检测
     match std::env::consts::OS {
         "windows" => start_antigravity_windows(),
         "macos" => start_antigravity_macos(),
@@ -217,4 +230,52 @@ fn try_start_from_commands(commands: Vec<&str>) -> Result<String, String> {
     }
 
     Err(format!("所有命令尝试失败: {}", errors.join(", ")))
+}
+
+/// 检测 Antigravity 可执行文件路径（不启动，只检测）
+pub fn detect_antigravity_executable() -> Option<PathBuf> {
+    log::info!("🔍 开始自动检测 Antigravity 可执行文件...");
+    
+    let result = match std::env::consts::OS {
+        "windows" => {
+            let paths = get_antigravity_windows_paths();
+            paths.into_iter().find(|p| {
+                if p.exists() {
+                    log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
+                    true
+                } else {
+                    false
+                }
+            })
+        },
+        "macos" => {
+            let paths = get_antigravity_macos_paths();
+            paths.into_iter().find(|p| {
+                if p.exists() {
+                    log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
+                    true
+                } else {
+                    false
+                }
+            })
+        },
+        "linux" => {
+            let paths = get_antigravity_linux_paths();
+            paths.into_iter().find(|p| {
+                if p.exists() {
+                    log::info!("✅ 找到 Antigravity 可执行文件: {}", p.display());
+                    true
+                } else {
+                    false
+                }
+            })
+        },
+        _ => None,
+    };
+    
+    if result.is_none() {
+        log::warn!("⚠️ 未能自动检测到 Antigravity 可执行文件");
+    }
+    
+    result
 }

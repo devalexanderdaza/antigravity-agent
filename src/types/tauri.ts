@@ -33,5 +33,25 @@ export interface SwitchToAntigravityAccountParams {
   account_name: string;
 }
 
+// Antigravity 路径检测相关类型
+export interface AntigravityPathInfo {
+  found: boolean;
+  path: string | null;
+  isCustomPath: boolean;
+}
+
+// Antigravity 可执行文件路径信息
+export interface AntigravityExecutableInfo {
+  found: boolean;
+  path: string | null;
+  isCustomPath: boolean;
+}
+
+// 当前配置的路径信息
+export interface CurrentPaths {
+  dataPath: string | null;
+  executablePath: string | null;
+}
+
 // 错误类型
 export type TauriError = string;
