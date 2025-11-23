@@ -1,12 +1,10 @@
 # Antigravity Agent
 
 > 开箱即用的 Antigravity 账户切换软件。
-> 
-![dashborad.png](screenshots/dashborad.png)
 
-Windows/MacOS ✅️ 
+<img src="screenshots/dashboard.png" width="45%"> <img src="screenshots/settings.png" width="45%">
 
-Linux 支持开发中...
+Windows/MacOS ✅️
 
 ## 下载安装
 
@@ -57,7 +55,6 @@ Linux 支持开发中...
 
 ## 📝 TODO 列表
 
-- [ ] 默认托盘模式
 - [ ] CLI 支持
 - [ ] 识别账户额度
 - [ ] 国际化支持
